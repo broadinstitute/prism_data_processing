@@ -7,7 +7,6 @@ library(dr4pl)
 library(readr)
 library(sva)
 library(sandwich)
-library(taigr)
 library(ranger)
 
 
