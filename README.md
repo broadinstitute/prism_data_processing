@@ -9,6 +9,9 @@ This repository contains 4 primary scripts:
 3. `Univariate_Discrete.R`
 4. `Multivariate.R`
 
+Before running anything open R Studio and run requirements.R to install 
+required packages.
+
 ### [`MTS_Data_Processing.R`](./MTS_Data_Processing.R)
 
 Does pre-processing based on raw MFI values and generates tables and dose
