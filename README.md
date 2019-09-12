@@ -9,7 +9,7 @@ This repository contains 4 primary scripts:
 3. `Univariate_Discrete.R`
 4. `Multivariate.R`
 
-Before running anything open R Studio and run requirements.R to install 
+**FIRST** open R Studio and run [`requirements.R`](./requirements.R) to install
 required packages.
 
 ### [`MTS_Data_Processing.R`](./MTS_Data_Processing.R)
@@ -41,4 +41,5 @@ predicting response.
 
 ### [`MTS_functions.R`](./MTS_functions.R)
 
-This file contains helper functions used in the scripts above and is sourced at the beginning of each.
+This file contains helper functions used in the scripts above and is sourced at
+the beginning of each.
