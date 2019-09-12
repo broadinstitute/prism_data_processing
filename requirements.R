@@ -6,5 +6,8 @@ install.packages(c("tidyverse",
                    "scam",
                    "dr4pl",
                    "readr",
-                   "sva")
+                   "sva",
+                   "ranger",
+                   "glmnet",
+                   "sandwich")
                  )

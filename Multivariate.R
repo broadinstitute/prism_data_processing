@@ -115,5 +115,5 @@ df <- data.table::fread()  # INSERT path to response table
 
 y <- df$response; names(y) <- df$ccle_name
 
-results <- biomarkers_cv(X, y)
+results <- biomarkers_cv(y, X)
 names(results) <- c("RFImp", "ENetImp", "RFPred", "ENetPred")
