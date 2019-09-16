@@ -373,11 +373,11 @@ DRC_TABLE_cb %<>%
 
 #---- Make collapsed LFC table ----
 
-LFC_COLLAPSED_TABLE = LFC_TABLE %>% 
+LFC_COLLAPSED_TABLE <- LFC_TABLE %>% 
   dplyr::mutate(compound_plate = word(prism_replicate, 1,2, 
                                       sep = fixed("_"))) %>% 
-  dplyr::group_by(ccle_name, culture, pert_mfc_id,
-                  pert_dose, compound_plate) %>%
+  dplyr::group_by(ccle_name, culture, pert_name, pert_mfc_id,
+                  pert_dose, pert_idose, compound_plate) %>%
   # LFC and LFC.cb values will be medains across replicates
   dplyr::summarize(LFC = median(LFC, na.rm = TRUE),
                    LFC.cb = median(LFC.cb, na.rm = TRUE))
