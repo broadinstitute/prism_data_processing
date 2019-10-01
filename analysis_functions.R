@@ -1,89 +1,34 @@
-library(plyr)
 library(tidyverse)
 library(magrittr)
-library(data.table)
+library(plyr)
 library(tidyr)
+library(tibble)
 library(glmnet)
 library(ranger)
-library(scam)
-library(dr4pl)
 library(glmnet)
-library(sva)
 library(sandwich)
-library(lmtest)
 library(stats)
-library(PRROC)
 library(reshape2)
 library(dplyr)
+library(lmtest)
 
 
-#---- General functions
-
-# area under curve given dose response parameters
-compute_auc <- function(l, u, ec50, h, md, MD) {
-  #if( l > 1) l = 1
-  #if( l < 0) l = 0
-  f1 = function(x) pmax(pmin((l + (u - l)/(1 + (2^x/ec50)^h)),1), 0 )
-  integrate(f1, log2(md),log2(MD))$value/(log2(MD/md))
-}
-
-# log IC50 from given DRC parameters
-compute_log_ic50 <- function(l, u, ec50, h, md, MD) {
-  if((l >= 0.5) | (u <= 0.5)){
-    return(NA)
-  }else{
-    f1 = function(x) (l + (u - l)/(1 + (2^x/ec50)^h) - 0.5)
-    return(tryCatch(uniroot(f1, c(log2(md), log2(MD)))$root,
-                    error = function(x) NA))
-  }
-}
-
-# corrects for pool effects using ComBat
-apply_combat <- function(Y) {
-  df <- Y %>%
-    dplyr::distinct(ccle_name, prism_replicate, LFC, culture, pool_id) %>%
-    tidyr::unite(cond, culture, pool_id, prism_replicate, sep = "::") %>%
-    dplyr::filter(is.finite(LFC))
-
-  batch <- df$cond
-  m <- rbind(df$LFC,
-             rnorm(length(df$LFC),
-                   mean =  mean(df$LFC, na.rm = TRUE),
-                   sd = sd(df$LFC, na.rm = TRUE)))
-
-  combat <- sva::ComBat(dat = m, batch = batch) %>%
-    t() %>%
-    as.data.frame() %>%
-    dplyr::mutate(ccle_name = df$ccle_name, cond = df$cond) %>%
-    dplyr::rename(LFC.cb = V1) %>%
-    dplyr::mutate(culture = stringr::word(cond, 1, sep = stringr::fixed("::")),
-                  pool_id = stringr::word(cond, 2, sep = stringr::fixed("::")),
-                  prism_replicate = stringr::word(cond, 3, sep = stringr::fixed("::"))) %>%
-    dplyr::select(-cond, -V2)
-
-  Y %>%
-    dplyr::left_join(combat) %>%
-    .$LFC.cb
-}
-
-
-#---- Conitnuous variables biomarkers ----
 #---- Conitnuous variables biomarkers ----
 # function to correlate a vector y with a matrix X using only the top features
 correlate <- function(X, y, max_features) {
-  
+
   # shared cell lines (feature matrix and results)
   overlap <- intersect(rownames(X), names(y))
   
   if (length(overlap) <= 2) {
     return(tibble())
   }
-  
+
   # correlate and filter top n by effect size
   corr_mat <- cor(X[overlap,], y[overlap], use = "pairwise.complete.obs")
   top_n <- scale(X[overlap, rank(-abs(corr_mat)) <= max_features])
   top_n <- top_n[, apply(top_n, 2, var) > 0]
-  
+
   # calculate p values and make tibble
   corr_table <- tibble(feature = colnames(top_n),
                        coeff = apply(top_n, 2, function(x) {
@@ -101,14 +46,14 @@ correlate <- function(X, y, max_features) {
                          return(l[2, 4])
                        })
   )
-  
+
   # calculate q values
   corr_table %<>%
     dplyr::arrange(desc(abs(coeff))) %>%
     dplyr::mutate(rank = 1:n()) %>%
     dplyr::mutate(q.val = p.adjust(c(p.val,rep(1, ncol(X) - ncol(top_n))),
                                    method = "BH")[1:ncol(top_n)])
-  
+
   return(corr_table)
 }
 
@@ -116,28 +61,28 @@ correlate <- function(X, y, max_features) {
 #---- Discrete variables biomarkers ----
 # funtion to run t-test for discrete variables based on viability metrics
 discrete_test <- function(X, y) {
-  
+
   out_table <- tibble()  # tracks output
   feats <- colnames(X)  # features to run tests on
   overlap <- dplyr::intersect(rownames(X), names(y))
   y <- y[overlap]
   X <- X[overlap,]
-  
+
   # loop through each feature (e.g. lineage)
   for (feat in feats) {
     has_feat <- rownames(X[X[,feat] == 1,])
     group <- y[has_feat]
     others <- dplyr::setdiff(y, group)
-    
+
     # need more than one data point to generate a group mean and test
     if (length(group) >= 5) {
-      
+
       # get t test results (two-sample unpaired)
       t <- stats::t.test(group, others)
       p_val <- t$p.value
       t_stat <- t$statistic["t"]
       effect_size <- mean(group) - mean(others)
-      
+
       result <- tibble(feature = feat,
                        effect_size = effect_size,
                        t = t_stat,
@@ -151,7 +96,7 @@ discrete_test <- function(X, y) {
   out_table$q <- p.adjust(c(out_table$p,
                             rep(1, length(feats) - nrow(out_table))),
                           method = "BH")[1:nrow(out_table)]
-  
+
   return(out_table)
 }
 
@@ -166,37 +111,37 @@ multivariate <- function(X, y, k = 10, n = 250){
   X <- scale(X[cl,]); y = y[cl]; N = floor(length(cl)/k)
   colnames(X) %<>% make.names()
   yhat_rf <- y; yhat_enet <- y
-  
+
   SS = tibble()  # output
-  
+
   # run cross validation k times
   for (kx in 1:k) {
     test <- cl[((kx - 1) * N + 1):(kx * N)]  # select test set
     train <- setdiff(cl, test)  # everything else is training
     X_train <- X[train,]
-    
+
     # assumes no NAs in X
     X_train <- X_train[,apply(X_train,2,var) > 0]
     X_test <- X[test,]
-    
+
     # select top n correlated features in X
     X_train <- X_train[,rank(-abs(cor(X_train,y[train])))<= n]
-    
+
     # makes RF and ENet models
     rf <- ranger::ranger(y ~ .,
                          data = as.data.frame(cbind(X_train, y = y[train])),
                          importance = "impurity")
-    
+
     enet <- glmnet::cv.glmnet(x = X_train,
                               y = y[train],
                               alpha = .5)
-    
+
     # generate predictions
     yhat_enet[test] <-
       predict.cv.glmnet(enet, newx = X_test[, colnames(X_train)])
     yhat_rf[test] <-
       predict(rf, data = as.data.frame(X_test[, colnames(X_train)]))$predictions
-    
+
     # get variable importance metrics
     a <- coef(enet)
     ss <- tibble(feature = names(rf$variable.importance),
@@ -208,17 +153,19 @@ multivariate <- function(X, y, k = 10, n = 250){
       dplyr::mutate(enet.coef = ifelse(is.na(enet.coef), 0, enet.coef),
                     enet.mse = mean((yhat_enet[test] - y[test])^2, na.rm = T),
                     fold = kx)
-    
+
     # add this model to the output
     SS %<>%
       dplyr::bind_rows(ss)
   }
+
+  # separate into RF and ENet tables, and one large table of model stats
+  model_table <- tibble()
   
-  # separate into RF and ENet tables
   RF.importances <- SS %>%
     dplyr::distinct(feature, RF.imp, fold) %>%
     reshape2::acast(feature ~ fold, value.var = "RF.imp")
-  
+
   # average values across validation runs
   RF.table <- tibble(feature = rownames(RF.importances),
                      RF.imp.mean = RF.importances %>%
@@ -228,20 +175,26 @@ multivariate <- function(X, y, k = 10, n = 250){
                      RF.imp.stability = RF.importances %>%
                        apply(1, function(x) mean(!is.na(x)))) %>%
     # only keep features used in > half the models
-    dplyr::filter((RF.imp.stability > 0.5), feature != "(Intercept)") %>%
-    dplyr::mutate(RF.MSE = mean(dplyr::distinct(SS, RF.mse, fold)$RF.mse,
+    dplyr::filter((RF.imp.stability > 0.5), feature != "(Intercept)")
+
+  # table ofrf model level statistics
+  rf_mod <- RF.table %>%
+    dplyr::mutate(MSE = mean(dplyr::distinct(SS, RF.mse, fold)$RF.mse,
                                 na.rm =T),
-                  RF.MSE.se = sd(dplyr::distinct(SS, RF.mse, fold)$RF.mse,
+                  MSE.se = sd(dplyr::distinct(SS, RF.mse, fold)$RF.mse,
                                  na.rm = T),
-                  RF.R2 = 1 - RF.MSE/var(y[1:(k*N)], na.rm = T),
-                  RF.PearsonScore = cor(y[1:(k*N)], yhat_rf[1:(k*N)],
-                                        use = "pairwise.complete.obs"))
+                  R2 = 1 - MSE/var(y[1:(k*N)], na.rm = T),
+                  PearsonScore = cor(y[1:(k*N)], yhat_rf[1:(k*N)],
+                                        use = "pairwise.complete.obs")) %>%
+    dplyr::distinct(MSE, MSE.se, R2, PearsonScore) %>%
+    dplyr::mutate(type = "RF")
   
-  
+  model_table %<>% dplyr::bind_rows(rf_mod)
+
   enet.importances <- SS %>%
     dplyr::distinct(feature, enet.coef, fold) %>%
     reshape2::acast(feature ~ fold, value.var = "enet.coef")
-  
+
   enet.table <- tibble(feature = rownames(enet.importances),
                        enet.coef.mean = enet.importances %>%
                          apply(1, function(x) mean(x[x!= 0], na.rm = T)),
@@ -249,50 +202,21 @@ multivariate <- function(X, y, k = 10, n = 250){
                          apply(1, function(x) sd(x[x!= 0], na.rm = T)),
                        enet.coef.stability =   enet.importances %>%
                          apply(1, function(x) mean(x != 0, na.rm = T))) %>%
-    dplyr::filter((enet.coef.stability >= 0.7), feature != "(Intercept)") %>%
-    dplyr::mutate(enet.MSE = mean(dplyr::distinct(SS, enet.mse, fold)$enet.mse,
+    dplyr::filter((enet.coef.stability >= 0.7), feature != "(Intercept)")
+  
+  enet_mod <- enet.table %>%
+    dplyr::mutate(MSE = mean(dplyr::distinct(SS, enet.mse, fold)$enet.mse,
                                   na.rm = T),
-                  enet.MSE.se = sd(dplyr::distinct(SS, enet.mse, fold)$enet.mse,
+                  MSE.se = sd(dplyr::distinct(SS, enet.mse, fold)$enet.mse,
                                    na.rm = T),
-                  enet.R2 = 1 - enet.MSE/var(y[1:(k*N)], na.rm = T),
-                  enet.PearsonScore = cor(y[1:(k*N)], yhat_enet[1:(k*N)],
-                                          use = "pairwise.complete.obs"))
+                  R2 = 1 - MSE/var(y[1:(k*N)], na.rm = T),
+                  PearsonScore = cor(y[1:(k*N)], yhat_enet[1:(k*N)],
+                                          use = "pairwise.complete.obs")) %>%
+    dplyr::distinct(MSE, MSE.se, R2, PearsonScore) %>%
+    dplyr::mutate(type = "ENet")
   
-  return(list(RF.table, enet.table, yhat_rf, yhat_enet))
-}
+  model_table %<>% dplyr::bind_rows(enet_mod)
 
-
-# funtion to correlate continous variables with viability metrics
-# UNUSED/DEPRECATED
-correlate_all <- function(X, Y, runs, max_features, feature_type){
   
-  out_table <- tibble()
-  
-  # for each compound
-  for (i in 1:nrow(runs)) {
-    run <- runs[i,]
-    
-    # select relevant data
-    d <- dplyr::filter(Y, pert_mfc_id == comp$pert_mfc_id, dose = dose) %>%
-      dplyr::group_by(ccle_name) %>%
-      dplyr::summarize(response = mean(response, na.rm = TRUE)) %>%
-      dplyr::filter(is.finite(response))
-    
-    # convert to response matrix
-    d_mat <- d$response; names(d_mat) <- d$ccle_name
-    
-    corr_table <- correlate(X, d_mat, max_features)
-    
-    # calculate q values
-    corr_table %<>%
-      dplyr::mutate(pert_mfc_id = comp$pert_mfc_id) %>%
-      dplyr::mutate(pert_name = comp$pert_name) %>%
-      dplyr::mutate(dose = Y$dose) %>%
-      dplyr::mutate(feature_type = feature_type)
-    
-    out_table %<>%
-      dplyr::bind_rows(corr_table)
-  }
-  
-  return(out_table)
+  return(list(RF.table, enet.table, model_table, yhat_rf, yhat_enet))
 }

@@ -9,5 +9,8 @@ install.packages(c("tidyverse",
                    "sva",
                    "ranger",
                    "glmnet",
-                   "sandwich")
+                   "sandwich",
+                   "plyr",
+                   "reshape2",
+                   "lmtest")
                  )

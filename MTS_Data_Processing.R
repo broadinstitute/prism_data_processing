@@ -1,11 +1,9 @@
-# Script to run initial processing on MTS data (logMFI.csv files)
-
 # import necessary libraries and functions using MTS_functions.R
 source("./MTS_functions.R")
 
 
 #---- Load Data ----
-data_path <- # INSERT PATH TO DATA HERE: should be "~/.../logMFI.csv"
+data_path <- # INSERT path to logMFI file
 unprocessed <- data.table::fread(data_path)
 
 # check for duplicates and append "_2" to pert_mfc_id
@@ -22,13 +20,13 @@ if (nrow(dups) > 0) {
     dplyr::distinct(ccle_name, rid, pert_mfc_id,pert_dose, culture,
                     prism_replicate, pool_id) %>%
     plyr::join(., unprocessed, match = "first")
-  
+
   unprocessed %<>%
     dplyr::anti_join(dups)
-  
+
   dups %<>%
     dplyr::mutate(pert_mfc_id = paste(pert_mfc_id, 2, sep = "_"))
-  
+
   unprocessed %<>%
     dplyr::bind_rows(dups)
 }
@@ -66,7 +64,7 @@ PR300_normalized <- PR300_normalized %>%
   dplyr::mutate(LMFI = scam(y ~ s(x, bs = "mpi"),
                           data = tibble(
                             y = rLMFI[rid %in% PR300_barcodes$rid],
-                            x = logMFI[rid %in% PR300_barcodes$rid])) %>% 
+                            x = logMFI[rid %in% PR300_barcodes$rid])) %>%
                   predict(newdata = tibble(x = logMFI))) %>%
   dplyr::ungroup() %>%
   dplyr::select(-logMFI)
@@ -91,14 +89,14 @@ PR500_normalized <- PR500_normalized %>%
   dplyr::mutate(LMFI = scam(y ~ s(x, bs = "mpi"),
                           data = tibble(
                             y = rLMFI[rid %in% PR500_barcodes$rid],
-                            x = logMFI[rid %in% PR500_barcodes$rid])) %>% 
+                            x = logMFI[rid %in% PR500_barcodes$rid])) %>%
                   predict(newdata = tibble(x = logMFI))) %>%
   dplyr::ungroup() %>%
   dplyr::select(-logMFI)
 
 PR500_normalized <- PR500_normalized %>%
-  left_join(PR500) %>%
-  select(-logMFI)
+  dplyr::left_join(PR500) %>%
+  dplyr::select(-logMFI)
 
 #---- Generate SSMD table ----
 
@@ -110,21 +108,21 @@ SSMD_table_300 <- PR300_normalized %>%
   # group common controls
   dplyr::group_by(pert_type, prism_replicate, ccle_name, pool_id, culture) %>%
   # take median and mad of results
-  dplyr::summarize(med = median(LMFI, na.rm = TRUE), 
+  dplyr::summarize(med = median(LMFI, na.rm = TRUE),
                    mad = mad(LMFI, na.rm = TRUE)) %>%
   # add to table
   dplyr::mutate(pert_type_md = paste0(pert_type, '_md'),
                 pert_type_mad = paste0(pert_type, '_mad')) %>%
   # spread to columns
-  tidyr::spread(key = pert_type_md, value = med, fill = 0) %>% 
+  tidyr::spread(key = pert_type_md, value = med, fill = 0) %>%
   tidyr::spread(key = pert_type_mad, value = mad, fill = 0) %>%
-  dplyr::ungroup() %>% 
+  dplyr::ungroup() %>%
   dplyr::select(-pert_type) %>%
   # give each control all values (median and mad for vehicle and poscon)
   dplyr::group_by(prism_replicate, ccle_name, pool_id, culture) %>%
   dplyr::summarize_all(sum) %>%
   # calculate SSMD and NNMD
-  dplyr::mutate(ssmd = (ctl_vehicle_md - trt_poscon_md) / 
+  dplyr::mutate(ssmd = (ctl_vehicle_md - trt_poscon_md) /
                   sqrt(ctl_vehicle_mad^2 +trt_poscon_mad^2),
                 nnmd = (ctl_vehicle_md - trt_poscon_md) / ctl_vehicle_mad)
 
@@ -133,12 +131,12 @@ PR300_error <- PR300_normalized %>%
   dplyr::filter(pert_type %in% c("ctl_vehicle", "trt_poscon"),
                 is.finite(LMFI)) %>%
   dplyr::group_by(rid, ccle_name ,prism_replicate) %>%
-  dplyr::summarize(error_rate = 
-                     min(PRROC::roc.curve(LMFI[pert_type == "ctl_vehicle"], 
-                                          LMFI[pert_type == "trt_poscon"], 
-                                          curve = TRUE )$curve[,1] + 1 - 
-                           PRROC::roc.curve(LMFI[pert_type == "ctl_vehicle"], 
-                                            LMFI[pert_type == "trt_poscon"], 
+  dplyr::summarize(error_rate =
+                     min(PRROC::roc.curve(LMFI[pert_type == "ctl_vehicle"],
+                                          LMFI[pert_type == "trt_poscon"],
+                                          curve = TRUE )$curve[,1] + 1 -
+                           PRROC::roc.curve(LMFI[pert_type == "ctl_vehicle"],
+                                            LMFI[pert_type == "trt_poscon"],
                                             curve = TRUE )$curve[,2])/2)
 
 # join with SSMD table
@@ -151,17 +149,17 @@ SSMD_table_500 <- PR500_normalized %>%
   dplyr::distinct(ccle_name, pert_type, prism_replicate,LMFI, profile_id,
                   pool_id, culture) %>%
   dplyr::group_by(pert_type, prism_replicate, ccle_name, pool_id, culture) %>%
-  dplyr::summarize(med = median(LMFI, na.rm = TRUE), 
+  dplyr::summarize(med = median(LMFI, na.rm = TRUE),
                    mad = mad(LMFI, na.rm = TRUE)) %>%
   dplyr::mutate(pert_type_md = paste0(pert_type, '_md'),
                 pert_type_mad = paste0(pert_type, '_mad')) %>%
-  tidyr::spread(key = pert_type_md, value = med, fill = 0) %>% 
+  tidyr::spread(key = pert_type_md, value = med, fill = 0) %>%
   tidyr::spread(key = pert_type_mad, value = mad, fill = 0) %>%
-  dplyr::ungroup() %>% 
+  dplyr::ungroup() %>%
   dplyr::select(-pert_type) %>%
   dplyr::group_by(prism_replicate, ccle_name, pool_id, culture) %>%
   dplyr::summarise_all(sum) %>%
-  dplyr::mutate(ssmd = (ctl_vehicle_md - trt_poscon_md) / 
+  dplyr::mutate(ssmd = (ctl_vehicle_md - trt_poscon_md) /
                   sqrt(ctl_vehicle_mad^2 +trt_poscon_mad^2),
                 nnmd = (ctl_vehicle_md - trt_poscon_md) / ctl_vehicle_mad)
 
@@ -169,12 +167,12 @@ PR500_error <- PR500_normalized %>%
   dplyr::filter(pert_type %in% c("ctl_vehicle", "trt_poscon"),
                 is.finite(LMFI)) %>%
   dplyr::group_by(rid, ccle_name ,prism_replicate) %>%
-  dplyr::summarize(error_rate = 
-                     min(PRROC::roc.curve(LMFI[pert_type == "ctl_vehicle"], 
-                                          LMFI[pert_type == "trt_poscon"], 
-                                          curve = TRUE )$curve[,1] + 1 - 
-                           PRROC::roc.curve(LMFI[pert_type == "ctl_vehicle"], 
-                                            LMFI[pert_type == "trt_poscon"], 
+  dplyr::summarize(error_rate =
+                     min(PRROC::roc.curve(LMFI[pert_type == "ctl_vehicle"],
+                                          LMFI[pert_type == "trt_poscon"],
+                                          curve = TRUE )$curve[,1] + 1 -
+                           PRROC::roc.curve(LMFI[pert_type == "ctl_vehicle"],
+                                            LMFI[pert_type == "trt_poscon"],
                                             curve = TRUE )$curve[,2])/2)
 
 SSMD_table_500 <- SSMD_table_500 %>%
@@ -184,8 +182,8 @@ SSMD_table_500 <- SSMD_table_500 %>%
 SSMD_TABLE <- dplyr::bind_rows(SSMD_table_500, SSMD_table_300) %>%
   # if error rate <= .05 then pass
   dplyr::mutate(pass = error_rate <= 0.05,
-                compound_plate =  word(prism_replicate, 1,2, 
-                                       sep = fixed("_"))) %>%
+                compound_plate =  stringr::word(prism_replicate, 1,2,
+                                       sep = stringr::fixed("_"))) %>%
   dplyr::filter(pool_id != "CTLBC") %>%
   dplyr::group_by(ccle_name, culture, compound_plate) %>%
   # sum how many passes per cell line
@@ -200,7 +198,7 @@ LFC_TABLE <- PR300_normalized %>%
   dplyr::bind_rows(PR500_normalized) %>%
   # join with SSMD
   dplyr::inner_join(SSMD_TABLE %>%
-                      dplyr::distinct(ccle_name, prism_replicate, 
+                      dplyr::distinct(ccle_name, prism_replicate,
                                       culture, pass, n.rep)) %>%
   # more than 1 passing sample
   dplyr::filter(pass, n.rep > 1) %>%
@@ -216,9 +214,9 @@ LFC_TABLE <- PR300_normalized %>%
 #---- Correct for pool effects ----
 
 LFC_TABLE %<>%
-  dplyr::filter(pert_type == "trt_cp") %>% 
-  dplyr::mutate(compound_plate = word(prism_replicate, 1,2,
-                                      sep = fixed("_"))) %>% 
+  dplyr::filter(pert_type == "trt_cp") %>%
+  dplyr::mutate(compound_plate = stringr::word(prism_replicate, 1,2,
+                                      sep = stringr::fixed("_"))) %>%
   tidyr::unite(col = "condition", pert_mfc_id, pert_dose, compound_plate,
                sep = "::", remove = FALSE) %>%
   split(.$condition) %>%
@@ -230,7 +228,7 @@ LFC_TABLE %<>%
 # table of all cultures with >4 doses (necessary number to fit curve)
 # with uncorrected values
 DRC_TABLE <- LFC_TABLE %>%
-  dplyr::filter(pert_type == "trt_cp") %>% 
+  dplyr::filter(pert_type == "trt_cp") %>%
   dplyr::distinct(ccle_name, culture, pert_mfc_id, pert_dose) %>%
   dplyr::count(ccle_name, culture, pert_mfc_id) %>%
   dplyr::filter(n > 4) %>%
@@ -244,66 +242,71 @@ for(jx in 1:nrow(DRC_TABLE)){
     # select one row (cell line x compund) and join with corresponding LFC data
     dplyr::filter(ix == jx) %>%
     dplyr::left_join(LFC_TABLE)
-  
+
   # fit decreasing logistic function to data
   a = tryCatch(dr4pl(dose = d$pert_dose,
                      response = 2^d$LFC,
                      method.init = "logistic",
-                     trend = "decreasing"), 
+                     trend = "decreasing"),
                error = function(e) NA)
   # store parameters
   param <- tryCatch(summary(a)$coefficients$Estimate, error = function(e) NA)
   # if successfully generated parameters make dataframe of them
   if(!is.na(param)){
-    # extract mean squared error
-    error_val <- tryCatch(as.double(gof.dr4pl(a)[[2,3]]),
-                          error = function(e) NA)
-    # calcuclate our own MSE (capping predictions and values at 1)
-    mse_capped <- 0
-    for(z in 1:nrow(d)){
-      e <- (max(0, min(1, 2^d$LFC[[z]]))
-            - max(0, min(1, dr4pl::MeanResponse(d$pert_dose[[z]], param))))^2
-      mse_capped <- mse_capped + e
-    }
-    mse_capped <- mse_capped/nrow(d)
-    
+
+    # calcuclate MSE and R2
+    mviab <- mean(2^d$LFC)
+
+    d %<>%
+      dplyr::mutate(pred = dr4pl::MeanResponse(pert_dose, param))
+    d %<>%
+      dplyr::mutate(e = (2^LFC - pred)^2)
+    d %<>%
+      dplyr::mutate(v = (2^LFC - mviab)^2)
+
+    mse <- mean(d$e)
+    R2 <- 1 - (sum(d$e)/sum(d$v))
+
     x <- tibble(ix = jx,
-               upper_limit = param[1],
-               ec50 = param[2],
-               slope = -param[3],
-               lower_limit = param[4],
-               convergence = a$convergence) %>%
+                min_dose = min(d$pert_dose),
+                max_dose = max(d$pert_dose),
+                upper_limit = param[1],
+                ec50 = param[2],
+                slope = -param[3],
+                lower_limit = param[4],
+                convergence = a$convergence) %>%
       # compute area under DRC curve
       dplyr::mutate(auc = compute_auc(lower_limit,
                                       upper_limit,
                                       ec50,
-                                      slope, 
+                                      slope,
                                       min(d$pert_dose),
                                       max(d$pert_dose)),
                     # compute IC50
-                    log2.ic50 = compute_log_ic50(lower_limit, 
-                                                 upper_limit, 
-                                                 ec50, slope, 
-                                                 min(d$pert_dose), 
+                    log2.ic50 = compute_log_ic50(lower_limit,
+                                                 upper_limit,
+                                                 ec50, slope,
+                                                 min(d$pert_dose),
                                                  max(d$pert_dose)),
-                    mse = error_val,
-                    mse_cap = mse_capped)
+                    mse = mse,
+                    R2 = R2)
+
     # add to dataframe
-    DRC %<>% 
+    DRC %<>%
       dplyr::bind_rows(x)
   }
 }
 
 # join with full table (by ix)
 DRC_TABLE <- DRC %>%
-  dplyr::filter(convergence) %>% 
-  dplyr::left_join(DRC_TABLE) %>% 
+  dplyr::filter(convergence) %>%
+  dplyr::left_join(DRC_TABLE) %>%
   dplyr::select(-ix, -convergence, -n)
 
 
 # REPEAT with ComBat corrected values
 DRC_TABLE_cb <- LFC_TABLE %>%
-  dplyr::filter(pert_type == "trt_cp") %>% 
+  dplyr::filter(pert_type == "trt_cp") %>%
   dplyr::distinct(ccle_name, culture, pert_mfc_id, pert_dose) %>%
   dplyr::count(ccle_name, culture, pert_mfc_id) %>%
   dplyr::filter(n > 4) %>%
@@ -315,50 +318,54 @@ for(jx in 1:nrow(DRC_TABLE_cb)){
   d = DRC_TABLE_cb %>%
     dplyr::filter(ix == jx) %>%
     dplyr::left_join(LFC_TABLE)
-  
+
   a = tryCatch(dr4pl(dose = d$pert_dose,
                      response = 2^d$LFC.cb,
                      method.init = "logistic",
-                     trend = "decreasing"), 
+                     trend = "decreasing"),
                error = function(e) NA)
   param <- tryCatch(summary(a)$coefficients$Estimate, error = function(e) NA)
   if(!is.na(param)){
-    error_val <- tryCatch(as.double(gof.dr4pl(a)[[2,3]]),
-                          error = function(e) NA)
-    mse_capped <- 0
-    for(z in 1:nrow(d)){
-      e <- (max(0, min(1, 2^d$LFC[[z]]))
-            - max(0, min(1, dr4pl::MeanResponse(d$pert_dose[[z]], param))))^2
-      mse_capped <- mse_capped + e
-    }
-    mse_capped <- mse_capped/nrow(d)
-    x <- tibble(ix = jx, 
-                upper_limit = param[1], 
+    mviab <- mean(2^d$LFC.cb)
+    d %<>%
+      dplyr::mutate(pred = dr4pl::MeanResponse(pert_dose, param))
+    d %<>%
+      dplyr::mutate(e = (2^LFC.cb - pred)^2)
+    d %<>%
+      dplyr::mutate(v = (2^LFC.cb - mviab)^2)
+
+    mse <- mean(d$e)
+    R2 <- 1 - (sum(d$e)/sum(d$v))
+
+    x <- tibble(ix = jx,
+                min_dose = min(d$pert_dose),
+                max_dose = max(d$pert_dose),
+                upper_limit = param[1],
                 ec50 = param[2],
-                slope = -param[3], 
+                slope = -param[3],
                 lower_limit = param[4],
                 convergence = a$convergence) %>%
-      dplyr::mutate(auc = compute_auc(lower_limit, 
-                                      upper_limit, 
-                                      ec50, 
-                                      slope, 
-                                      min(d$pert_dose), 
+      dplyr::mutate(auc = compute_auc(lower_limit,
+                                      upper_limit,
+                                      ec50,
+                                      slope,
+                                      min(d$pert_dose),
                                       max(d$pert_dose)),
-                    log2.ic50 = compute_log_ic50(lower_limit, 
-                                                 upper_limit, 
-                                                 ec50, 
-                                                 slope, 
-                                                 min(d$pert_dose), 
+                    log2.ic50 = compute_log_ic50(lower_limit,
+                                                 upper_limit,
+                                                 ec50,
+                                                 slope,
+                                                 min(d$pert_dose),
                                                  max(d$pert_dose)),
-                    mse = error_val,
-                    mse_cap = mse_capped)
+                    mse = mse,
+                    R2 = R2)
     DRC_cb %<>% dplyr::bind_rows(x)
   }
 }
 
 DRC_TABLE_cb <- DRC_cb %>%
-  dplyr::filter(convergence) %>% 
-  dplyr::left_join(DRC_TABLE_cb) %>% 
+  dplyr::filter(convergence) %>%
+  dplyr::left_join(DRC_TABLE_cb) %>%
   dplyr::select(-ix, -convergence, -n)
 
 
@@ -373,9 +380,9 @@ DRC_TABLE_cb %<>%
 
 #---- Make collapsed LFC table ----
 
-LFC_COLLAPSED_TABLE <- LFC_TABLE %>% 
-  dplyr::mutate(compound_plate = word(prism_replicate, 1,2, 
-                                      sep = fixed("_"))) %>% 
+LFC_COLLAPSED_TABLE <- LFC_TABLE %>%
+  dplyr::mutate(compound_plate = stringr::word(prism_replicate, 1,2,
+                                      sep = stringr::fixed("_"))) %>%
   dplyr::group_by(ccle_name, culture, pert_name, pert_mfc_id,
                   pert_dose, pert_idose, compound_plate) %>%
   # LFC and LFC.cb values will be medains across replicates
@@ -385,37 +392,53 @@ LFC_COLLAPSED_TABLE <- LFC_TABLE %>%
 
 #---- Write to .csv ----
 
-readr::write_csv(LFC_TABLE, 
-                 paste0(dirname(data_path), "/LFC_TABLE.csv"))
-readr::write_csv(LFC_COLLAPSED_TABLE, 
-                 paste0(dirname(data_path), "/LFC_COLLAPSED_TABLE.csv"))
+# ssmd table
 readr::write_csv(SSMD_TABLE, paste0(dirname(data_path), "/SSMD_TABLE.csv"))
-readr::write_csv(DRC_TABLE, paste0(dirname(data_path), "/DRC_TABLE.csv"))
-readr::write_csv(DRC_TABLE_cb, paste0(dirname(data_path), "/DRC_TABLE_cb.csv"))
 
+# compound data (DRC, LFC)
+compounds <- dplyr::distinct(LFC_TABLE, pert_name, pert_mfc_id)
+for (i in 1:nrow(compounds)) {
+  id <- compounds[[i, "pert_mfc_id"]]
+  name <- compounds[[i, "pert_name"]]
+  path <- paste0(dirname(data_path), "/", id)
+  if (!dir.exists(path)) {
+    dir.create(path)
+  }
+  lfc <- dplyr::filter(LFC_TABLE, pert_mfc_id == id)
+  drc <- dplyr::filter(DRC_TABLE_cb, pert_mfc_id == id)
+  lfc_coll <-
+    dplyr::filter(LFC_COLLAPSED_TABLE, pert_mfc_id == id)
+
+  readr::write_csv(lfc, paste0(path, "/LFC_TABLE.csv"))
+  readr::write_csv(lfc_coll, paste0(path, "/LFC_COLLAPSED_TABLE.csv"))
+  readr::write_csv(drc, paste0(path, "/DRC_TABLE.csv"))
+}
 
 #---- Generate DRC plots ----
 
 # generate a .pdf of graphs for each compound
-for(compound in pert_names$pert_mfc_id){
-  
+for(i in 1:nrow(compounds)){
+  id <- compounds[[i, "pert_mfc_id"]]
+  name <- compounds[[i, "pert_name"]]
+
   # filter to just see that compound
   compound_DRC <- DRC_TABLE_cb %>%
-    dplyr::filter(pert_mfc_id == compound) %>%
+    dplyr::filter(pert_mfc_id == id) %>%
     dplyr::arrange(desc(auc))
-  
+
   # tracks LFC info
   compound_LFC <- LFC_TABLE %>%
-    dplyr::filter(pert_mfc_id == compound)
-  
+    dplyr::filter(pert_mfc_id == id)
+
   # create .pdf
-  pdf(paste0(dirname(data_path), "/", toupper(compound), "_DRCfigures.pdf"))
-  
+  pdf(paste0(dirname(data_path), "/", id, "/",
+             toupper(id), "_DRCfigures.pdf"))
+
   # loop through each cell line treated by compound and plot DRC
   cell_lines <- compound_DRC$ccle_name %>% unique()
   for(cell_line in cell_lines){
     d <- compound_DRC %>%
-      dplyr::filter(ccle_name == cell_line) 
+      dplyr::filter(ccle_name == cell_line)
     cultures <- d$culture %>% unique()
     # for each culture generate a graph
     for(cult in cultures){
@@ -435,14 +458,14 @@ for(compound in pert_names$pert_mfc_id){
       p = d_cult_line %>%
         ggplot() +
         geom_point(aes(x = log2(pert_dose),
-                       color = prism_replicate, y = 2^LFC)) + 
+                       color = prism_replicate, y = 2^LFC.cb)) +
         geom_line(data = tibble(x = xx, y = f1(xx)),
                   aes(x = x, y = y, group = 1),  lwd =1 ) +
-        ylim(0,2) + 
+        ylim(0,2) +
         labs(x = 'log2(dose)', y = 'viability', color = "",
-             title = paste0(toupper(compound), " - ", 
+             title = paste0(toupper(id), " - ",
                             d_cult$pert_name, "\n", cell_line,' - ', cult,
-                            "\nAUC:", round(d_cult$auc,2), 
+                            "\nAUC:", round(d_cult$auc,2),
                             " - IC50:", round(2^d_cult$log2.ic50,2)))
       # outputs to .pdf
       print(p)
@@ -451,4 +474,3 @@ for(compound in pert_names$pert_mfc_id){
   # closes .pdf
   dev.off()
 }
-
