@@ -2,12 +2,13 @@
 Public version of the data processing pipeline for PRISM medium throughput
 screens (MTS)
 
-This repository contains 4 primary scripts:
+This repository contains 5 primary scripts:
 
 1. `MTS_Data_Processing.R`
-2. `Univariate_Continuous.R`
-3. `Univariate_Discrete.R`
-4. `Multivariate.R`
+2. `MTS_Analysis.R`
+3. `Univariate_Continuous.R`
+4. `Univariate_Discrete.R`
+5. `Multivariate.R`
 
 **FIRST** open R Studio and run [`requirements.R`](./requirements.R) to install
 required packages.
