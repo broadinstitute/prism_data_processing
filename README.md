@@ -20,6 +20,16 @@ response curves.
 Steps of pre-processing outlined in [`MTS_pipeline.md`](./MTS_pipeline.md)
 
 
+### [`MTS_Analysis.R`](./MTS_Analysis.R)
+
+Generates biomarker analysis for the processed data, including, univariate and
+multivariate analyses. Requires a directory of expression data (RNA, mutations,
+etc.) and the results of `MTS_Data_Processing.R`. See below for more details on
+each analysis function. Relies on `analysis_functions.R`.
+
+Note: it is recommended to use this script over individual analyses as it has
+the most up to date methods.
+
 ### [`Univariate_Continuous.R`](./Univariate_Continuous.R)
 
 Calculates univariate correlations between a given continuous feature of a cell
