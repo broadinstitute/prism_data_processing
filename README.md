@@ -1,6 +1,6 @@
 # prism\_data\_processing
 Public version of the data processing pipeline for PRISM medium throughput
-screens (MTS)
+screens (MTS). For use by collaborators to regenerate tables and plots.
 
 This repository contains 5 primary scripts:
 
