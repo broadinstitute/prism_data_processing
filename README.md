@@ -10,13 +10,17 @@ This repository contains 5 primary scripts:
 4. `Univariate_Discrete.R`
 5. `Multivariate.R`
 
-**FIRST** open R Studio and run [`requirements.R`](./requirements.R) to install
-required packages.
+**FIRST** run [`requirements.R`](./requirements.R) either in RStudio or terminal
+to install required packages. For terminal execute:
+```bash
+$ Rscript requirements.R
+```
 
 ### [`MTS_Data_Processing.R`](./MTS_Data_Processing.R)
 
-Does pre-processing based on raw MFI values and generates tables and dose
-response curves.
+Does pre-processing based on raw median fluorescent intensity (MFI) values and
+generates tables with data on QC, viabilities, and dose-response parameters, as
+well as figures showing dose response curves.
 
 Steps of pre-processing outlined in [`MTS_pipeline.md`](./MTS_pipeline.md)
 
