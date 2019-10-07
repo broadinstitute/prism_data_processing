@@ -54,8 +54,7 @@ Trains a random forest and elastic net models on the data given a feature and a
 response. These models then output the relative importance of each feature in
 predicting response.
 
-### [`MTS_functions.R`](./MTS_functions.R) and
-[`analysis_functions.R`](./analysis_functions.R)
+### [`MTS_functions.R`](./MTS_functions.R) and [`analysis_functions.R`](./analysis_functions.R)
 
 These files contain helper functions used in the scripts above and are sourced
 at the beginning of each (to install necessary packages and define functions).
