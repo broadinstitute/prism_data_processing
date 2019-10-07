@@ -131,7 +131,7 @@ for (i in 1:nrow(runs)) {
                     rank = 1:n(),
                     model = "ccle")
     result_enet_ccle <- multi_results_ccle[[2]] %>%
-      dplyr::arrange(desc(enet.coef.mean)) %>%
+      dplyr::arrange(desc(abs(enet.coef.mean))) %>%
       dplyr::mutate(pert_mfc_id = run$pert_mfc_id,
                     pert_name = run$pert_name,
                     pert_idose = run$dose,
