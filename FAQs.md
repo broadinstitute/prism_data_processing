@@ -1,6 +1,8 @@
 # FAQs
 Frequently asked questions about MTS data processing and reports. This document is continuously updated.
 
+### Which datasets were used for biomarker analysis?
+
 ### Why use error rate instead of SSMD as QC?
 We find that error rate is better at determining which cell lines are noisiest. If you wish to use SSMD to QC your data (for example to reflect previous PRISM results) the information is tabulated in `SSMD_TABLE.csv`.
 
