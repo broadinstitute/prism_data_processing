@@ -27,7 +27,7 @@ correlate <- function(X, y, max_features) {
   # correlate and filter top n by effect size
   corr_mat <- cor(X[overlap,], y[overlap], use = "pairwise.complete.obs")
   top_n <- scale(X[overlap, rank(-abs(corr_mat)) <= max_features])
-  top_n <- top_n[, apply(top_n, 2, var) > 0]
+  top_n <- top_n[, apply(top_n, 2, function(x) var(x, na.rm = TRUE)) > 0]
 
   # calculate p values and make tibble
   corr_table <- tibble(feature = colnames(top_n),

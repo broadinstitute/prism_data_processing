@@ -26,9 +26,11 @@ XPR <- data.table::fread(paste0(expression_dir, "/xpr.csv")) %>%  # CRISPR KO
   as.matrix(., rownames = "V1")
 LIN <- data.table::fread(paste0(expression_dir, "/lin.csv")) %>%  # lineage
   as.matrix(., rownames = "V1")
+shRNA <- data.table::fread(paste0(expression_dir, "/shrna.csv")) %>%  # lineage
+  as.matrix(., rownames = "V1")
 
-continuous_features <- list(GE, CNA, MET, miRNA, RPPA, XPR)
-continuous_names <- c("GE", "CNA", "MET", "miRNA", "RPPA", "XPR")
+continuous_features <- list(GE, CNA, MET, miRNA, RPPA, XPR, shRNA)
+continuous_names <- c("GE", "CNA", "MET", "miRNA", "RPPA", "XPR", "shRNA")
 
 discrete_features <- list(LIN, MUT)
 discrete_names <- c("LIN", "MUT")
@@ -162,6 +164,8 @@ for (i in 1:nrow(runs)) {
   for (j in 1:length(continuous_features)) {
     feature_table <- continuous_features[[j]]
     feature_type <- continuous_names[j]
+    
+    print(feature_type)
 
     # run correlation
     corr_table <- correlate(feature_table, y, 250)
