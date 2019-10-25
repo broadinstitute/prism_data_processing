@@ -1,8 +1,8 @@
 # prism\_data\_processing
 
 <p float="left">
-  <img src="./BroadInstLogoforDigitalRGB.png" width="200" /> 
-  <img src="./prism_logo_tagline_side.png" width="300" />
+  <img src="BroadInstLogoforDigitalRGB.png" width="200" />
+  <img src="prism_logo_tagline_side.png" width="300" />
 </p>
 
 Public version of the data processing pipeline for PRISM medium throughput screens (MTS). For use by collaborators to regenerate tables and plots correlating drug response to cell line features. Public cell line data for equivalent analysis is available on the [DepMap Portal](https://depmap.org/portal/).
