@@ -1,5 +1,5 @@
 # prism\_data\_processing
-Public version of the data processing pipeline for PRISM medium throughput screens (MTS). For use by collaborators to regenerate tables and plots.
+Public version of the data processing pipeline for PRISM medium throughput screens (MTS). For use by collaborators to regenerate tables and plots correlating drug response to cell line features. Public cell line data for equivalent analysis is available on the [DepMap Portal](https://depmap.org/portal/).
 
 This repository contains 5 primary scripts:
 
@@ -9,7 +9,7 @@ This repository contains 5 primary scripts:
 4. `Univariate_Discrete.R`
 5. `Multivariate.R`
 
-**FIRST** run [`requirements.R`](./requirements.R) either in RStudio or terminal to install required packages. For terminal execute:
+**FIRST** run [`requirements.R`](./requirements.R) either in RStudio or terminal to install required packages. For shell execute:
 ```bash
 $ Rscript requirements.R
 ```
@@ -44,3 +44,8 @@ Trains a random forest and elastic net models on the data given a feature and a 
 ### [`MTS_functions.R`](./MTS_functions.R) and [`analysis_functions.R`](./analysis_functions.R)
 
 These files contain helper functions used in the scripts above and are sourced at the beginning of each (to install necessary packages and define functions). `analysis_functions.R` contains the most up to date versions (used in `MTS_Analysis.R`), while `MTS_functions.R` contains older versions used in one-off analyses.
+
+In `analysis_functions.R`, each function takes a matrix of features (X) and a vector of responses (y) as input. `multivariate` fits both an elastic net and random forest to the data.
+
+---
+_This repository is maintained by [Cancer Data Science](https://www.cancerdatascience.org/) at the Broad Institute of MIT and Harvard_
