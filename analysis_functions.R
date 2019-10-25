@@ -1,6 +1,6 @@
+library(plyr)
 library(tidyverse)
 library(magrittr)
-library(plyr)
 library(tidyr)
 library(tibble)
 library(glmnet)
@@ -19,8 +19,8 @@ correlate <- function(X, y, max_features) {
 
   # shared cell lines (feature matrix and results)
   overlap <- intersect(rownames(X), names(y))
-  
-  if (length(overlap) <= 2) {
+
+  if (length(overlap) <= 10) {
     return(tibble())
   }
 
@@ -28,8 +28,8 @@ correlate <- function(X, y, max_features) {
   corr_mat <- cor(X[overlap,], y[overlap], use = "pairwise.complete.obs")
   top_n <- scale(X[overlap, rank(-abs(corr_mat)) <= max_features])
   top_n <- top_n[, apply(top_n, 2, function(x) var(x, na.rm = TRUE)) > 0]
+  y <- scale(y)[,1]
 
-  # calculate p values and make tibble
   corr_table <- tibble(feature = colnames(top_n),
                        coeff = apply(top_n, 2, function(x) {
                          m = lm(y ~ x, data = data.frame(y = y[overlap],
@@ -46,6 +46,10 @@ correlate <- function(X, y, max_features) {
                          return(l[2, 4])
                        })
   )
+
+  if (length(corr_table) < 1) {
+    return(corr_table)
+  }
 
   # calculate q values
   corr_table %<>%
@@ -65,6 +69,11 @@ discrete_test <- function(X, y) {
   out_table <- tibble()  # tracks output
   feats <- colnames(X)  # features to run tests on
   overlap <- dplyr::intersect(rownames(X), names(y))
+
+  if (length(overlap) < 10) {
+    return(out_table)
+  }
+
   y <- y[overlap]
   X <- X[overlap,]
 
@@ -75,7 +84,7 @@ discrete_test <- function(X, y) {
     others <- dplyr::setdiff(y, group)
 
     # need more than one data point to generate a group mean and test
-    if (length(group) >= 5) {
+    if (length(group) >= 5 & length(others) >= 5) {
 
       # get t test results (two-sample unpaired)
       t <- stats::t.test(group, others)
@@ -92,6 +101,11 @@ discrete_test <- function(X, y) {
         dplyr::bind_rows(result)
     }
   }
+
+  if (nrow(out_table) < 1) {
+    return(out_table)
+  }
+
   # calculate q values (BH procedure)
   out_table$q <- p.adjust(c(out_table$p,
                             rep(1, length(feats) - nrow(out_table))),
@@ -109,6 +123,7 @@ multivariate <- function(X, y, k = 10, n = 250){
   y <- y[is.finite(y)]  # only finite values
   cl <- sample(intersect(rownames(X), names(y)))  # overlapping rows
   X <- scale(X[cl,]); y = y[cl]; N = floor(length(cl)/k)
+
   colnames(X) %<>% make.names()
   yhat_rf <- y; yhat_enet <- y
 
@@ -132,27 +147,43 @@ multivariate <- function(X, y, k = 10, n = 250){
                          data = as.data.frame(cbind(X_train, y = y[train])),
                          importance = "impurity")
 
-    enet <- glmnet::cv.glmnet(x = X_train,
-                              y = y[train],
-                              alpha = .5)
+    # enet errors out under certain conditions
+    enet <- tryCatch(expr = {
+      glmnet::cv.glmnet(x = X_train,
+                        y = y[train],
+                        alpha = .5)
+    }, error = function(e) {
+      print(paste0("Warning, there was an error: ", e))
+      return(NULL)
+    })
 
-    # generate predictions
-    yhat_enet[test] <-
-      predict.cv.glmnet(enet, newx = X_test[, colnames(X_train)])
+    # generate predictions and get variable importances
+    if(!is.null(enet)) {
+      yhat_enet[test] <-
+        predict.cv.glmnet(enet, newx = X_test[, colnames(X_train)])
+      a <- coef(enet)
+    } else {
+      yhat_enet[test] <- NA
+      a <- NULL
+    }
     yhat_rf[test] <-
       predict(rf, data = as.data.frame(X_test[, colnames(X_train)]))$predictions
 
-    # get variable importance metrics
-    a <- coef(enet)
+    # get variable importance metrics for rf
     ss <- tibble(feature = names(rf$variable.importance),
                  RF.imp = rf$variable.importance / sum(rf$variable.importance),
                  RF.mse = mean((yhat_rf[test] - y[test])^2)
-    ) %>%
-      dplyr::full_join(tibble(feature = a@Dimnames[[1]][a@i+1],
-                              enet.coef = a@x), by = "feature") %>%
-      dplyr::mutate(enet.coef = ifelse(is.na(enet.coef), 0, enet.coef),
-                    enet.mse = mean((yhat_enet[test] - y[test])^2, na.rm = T),
-                    fold = kx)
+                 )
+    if(!is.null(enet)) {
+      ss %<>%
+        dplyr::full_join(tibble(feature = a@Dimnames[[1]][a@i+1],
+                                enet.coef = a@x), by = "feature") %>%
+        dplyr::mutate(enet.coef = ifelse(is.na(enet.coef), 0, enet.coef),
+                      enet.mse = mean((yhat_enet[test] - y[test])^2, na.rm = T))
+    }
+
+    ss %<>%
+      dplyr::mutate(fold = kx)
 
     # add this model to the output
     SS %<>%
@@ -161,7 +192,7 @@ multivariate <- function(X, y, k = 10, n = 250){
 
   # separate into RF and ENet tables, and one large table of model stats
   model_table <- tibble()
-  
+
   RF.importances <- SS %>%
     dplyr::distinct(feature, RF.imp, fold) %>%
     reshape2::acast(feature ~ fold, value.var = "RF.imp")
@@ -188,35 +219,42 @@ multivariate <- function(X, y, k = 10, n = 250){
                                         use = "pairwise.complete.obs")) %>%
     dplyr::distinct(MSE, MSE.se, R2, PearsonScore) %>%
     dplyr::mutate(type = "RF")
-  
+
   model_table %<>% dplyr::bind_rows(rf_mod)
 
-  enet.importances <- SS %>%
-    dplyr::distinct(feature, enet.coef, fold) %>%
-    reshape2::acast(feature ~ fold, value.var = "enet.coef")
+  if ("enet.coef" %in% colnames(SS)) {
+    enet.importances <- SS %>%
+      dplyr::distinct(feature, enet.coef, fold) %>%
+      reshape2::acast(feature ~ fold, value.var = "enet.coef")
 
-  enet.table <- tibble(feature = rownames(enet.importances),
-                       enet.coef.mean = enet.importances %>%
-                         apply(1, function(x) mean(x[x!= 0], na.rm = T)),
-                       enet.coef.sd =   enet.importances %>%
-                         apply(1, function(x) sd(x[x!= 0], na.rm = T)),
-                       enet.coef.stability =   enet.importances %>%
-                         apply(1, function(x) mean(x != 0, na.rm = T))) %>%
-    dplyr::filter((enet.coef.stability >= 0.7), feature != "(Intercept)")
-  
-  enet_mod <- enet.table %>%
-    dplyr::mutate(MSE = mean(dplyr::distinct(SS, enet.mse, fold)$enet.mse,
-                                  na.rm = T),
-                  MSE.se = sd(dplyr::distinct(SS, enet.mse, fold)$enet.mse,
-                                   na.rm = T),
-                  R2 = 1 - MSE/var(y[1:(k*N)], na.rm = T),
-                  PearsonScore = cor(y[1:(k*N)], yhat_enet[1:(k*N)],
-                                          use = "pairwise.complete.obs")) %>%
-    dplyr::distinct(MSE, MSE.se, R2, PearsonScore) %>%
-    dplyr::mutate(type = "ENet")
-  
+    enet.table <- tibble(feature = rownames(enet.importances),
+                         enet.coef.mean = enet.importances %>%
+                           apply(1, function(x) mean(x[x!= 0], na.rm = T)),
+                         enet.coef.sd =   enet.importances %>%
+                           apply(1, function(x) sd(x[x!= 0], na.rm = T)),
+                         enet.coef.stability = enet.importances %>%
+                           apply(1, function(x) mean(x != 0, na.rm = T))) %>%
+      dplyr::filter((enet.coef.stability >= 0.7), feature != "(Intercept)")
+
+    enet_mod <- enet.table %>%
+      dplyr::mutate(MSE = mean(dplyr::distinct(SS, enet.mse, fold)$enet.mse,
+                               na.rm = T),
+                    MSE.se = sd(dplyr::distinct(SS, enet.mse, fold)$enet.mse,
+                                na.rm = T),
+                    R2 = 1 - MSE/var(y[1:(k*N)], na.rm = T),
+                    PearsonScore = cor(y[1:(k*N)], yhat_enet[1:(k*N)],
+                                       use = "pairwise.complete.obs")) %>%
+      dplyr::distinct(MSE, MSE.se, R2, PearsonScore) %>%
+      dplyr::mutate(type = "ENet")
+  } else {
+    enet.importances <- tibble()
+    enet.table <- tibble()
+    enet_mod <- tibble()
+  }
+
+
   model_table %<>% dplyr::bind_rows(enet_mod)
 
-  
+
   return(list(RF.table, enet.table, model_table, yhat_rf, yhat_enet))
 }
