@@ -139,7 +139,7 @@ for (i in 1:nrow(runs)) {
                     pert_idose = run$dose,
                     rank = 1:n(),
                     model = "ccle")
-    result_models_ccle <- multi_results_all[[3]] %>%
+    result_models_ccle <- multi_results_ccle[[3]] %>%
       dplyr::mutate(pert_mfc_id = run$pert_mfc_id,
                     pert_name = run$pert_name,
                     pert_idose = run$dose,
