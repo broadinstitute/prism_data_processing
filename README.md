@@ -15,7 +15,7 @@ This repository contains 5 primary scripts:
 4. `Univariate_Discrete.R`
 5. `Multivariate.R`
 
-**FIRST** run [`requirements.R`](./requirements.R) either in RStudio or terminal to install required packages. For shell execute:
+**FIRST** run [`requirements.R`](./requirements.R) either in RStudio or terminal to install  packages required for analysis. For shell execute:
 ```bash
 $ Rscript requirements.R
 ```
@@ -31,7 +31,7 @@ Steps of pre-processing outlined in [`MTS_pipeline.md`](./MTS_pipeline.md)
 
 Generates biomarker analysis for the processed data, including, univariate and multivariate analyses. Requires a directory of expression data (RNA, mutations, etc.) and the results of `MTS_Data_Processing.R`. See below for more details on each analysis function. Relies on `analysis_functions.R`.
 
-Note: it is recommended to use this script over individual analyses as it has the most up to date methods.
+Note: it is recommended to use this script over individual analyses as it has the most up to date methods. To run a single analysis (e.g. correlation of a feature like dependency score with an assay result like AUC), use the `correlate`, `discrete_test`, or `multivariate` functions in `analysis_functions.R`
 
 ### [`Univariate_Continuous.R`](./Univariate_Continuous.R)
 
