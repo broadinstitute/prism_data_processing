@@ -1,6 +1,6 @@
 # MTS Processing Pipeline
 
-This document outlines the steps executed by `MTS_Data_Processing.R`, an R script to process Level 2 MTS data. It can be used to regenerate any data obtained from PRISM.
+This document outlines the steps executed by `MTS_Data_Processing.R`, an R script to process Level 2 MTS data. That script can be used to regenerate any data obtained from PRISM based on logMFI values.
 
 - **Input** is logMFI values associated with 3 replicates of cell line treatments with drugs and controls.
 - **Output** is files describing dose-response of each cell line to each drug, mean-fold change of cell lines in response to drugs, and statistical significance metrics.
@@ -58,3 +58,7 @@ The "resulting data" section of each step is meant to guide the user through the
 ### 9) Generate DRC plots for each compound
 1. Plot dose-response curves for each cell line x drug
 2. **Resulting data:** creates a PDF for each drug in the set containing DRC for each cell line
+
+---
+
+To run biomarker analyses, use `MTS_Analysis.R`, passing a folder with the data output from this pipeline.

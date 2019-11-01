@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="BroadInstLogoforDigitalRGB.png" width="300" hspace="20"/>
+  <img src="BroadInstLogoforDigitalRGB.png" width="300" hspace="40"/>
   <img src="prism_logo_tagline_side.png" width="400" />
 </p>
 
