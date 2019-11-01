@@ -1,6 +1,6 @@
 # MTS Processing Pipeline
 
-This document outlines the steps executed by `MTS_Data_Processing.R`, an R script to process Level 2 MTS data. That script can be used to regenerate any data obtained from PRISM based on logMFI values.
+This document outlines the steps executed by `MTS_Data_Processing.R`, an R script to process Level 2 MTS data. That script can be used to regenerate any data obtained from PRISM based on logMFI values. This information is also available in the "Data Processing" section of the report.
 
 - **Input** is logMFI values associated with 3 replicates of cell line treatments with drugs and controls.
 - **Output** is files describing dose-response of each cell line to each drug, mean-fold change of cell lines in response to drugs, and statistical significance metrics.
