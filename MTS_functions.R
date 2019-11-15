@@ -1,3 +1,5 @@
+# Helper functions for MTS data processing pipeline
+
 library(plyr)
 library(tidyverse)
 library(magrittr)

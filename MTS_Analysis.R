@@ -1,6 +1,5 @@
-# Script to run entire MTS pipeline. For use with sparklespray. Input is a
-# directory of data files
-
+# Script to run MTS biomarker analyses
+# Replace expression_dir and response_dir with appropriate directories to run
 
 # source functions from functions script (also loads libraries)
 source("./analysis_functions.R")

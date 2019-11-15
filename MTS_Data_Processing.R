@@ -1,6 +1,9 @@
+# MTS data processing pipeline (from logMFI to dose-response and viability)
+# See MTS_Pipelin.md for details
+# Replace data_path with appropriate file to run
+
 # import necessary libraries and functions using MTS_functions.R
 source("./MTS_functions.R")
-
 
 #---- Load Data ----
 data_path <- # INSERT path to logMFI file
