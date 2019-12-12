@@ -7,18 +7,31 @@
 
 Public version of the data processing pipeline for PRISM medium throughput screens (MTS). For use by collaborators to regenerate tables and plots correlating drug response to cell line features. Public cell line data for equivalent analysis is available on the [DepMap Portal](https://depmap.org/portal/).
 
-This repository contains 5 primary scripts:
+This repository contains 6 primary scripts:
 
-1. `MTS_Data_Processing.R`
-2. `MTS_Analysis.R`
-3. `Univariate_Continuous.R`
-4. `Univariate_Discrete.R`
-5. `Multivariate.R`
+1. `make_logMFI.R`
+2. `MTS_Data_Processing.R`
+3. `MTS_Analysis.R`
+4. `Univariate_Continuous.R`
+5. `Univariate_Discrete.R`
+6. `Multivariate.R`
 
 **FIRST** run [`requirements.R`](./requirements.R) either in RStudio or terminal to install  packages required for analysis. For shell execute:
 ```bash
 $ Rscript requirements.R
 ```
+
+### [`make_logMFI.R`](./make_logMFI.R)
+Only necessary for processing raw files downloaded from [clue.io](https://clue.io/).
+
+Converts raw .gctx and .txt files downloaded from clue.io to readable logMFI.csv. This file contains raw log2 median fluorescence intensity (MFI) data for each cell line at each treatment. Requires:
+- `PR300_LMFI.gctx`: readout for PR300
+- `PR500_LMFI.gctx`: readout for PR500
+- `PR300_inst_info.txt`: treatment info for PR300
+- `PR300_cell_info.txt`: cell line info for PR300
+- `PR500_inst_info.txt`: treatment info for PR500
+- `PR500_cell_info.txt`: cell line info for PR500
+- `skipped_wells.csv`: file indicating which wells did not receive compound (optional)
 
 ### [`MTS_Data_Processing.R`](./MTS_Data_Processing.R)
 
