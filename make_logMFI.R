@@ -7,7 +7,6 @@ library(readr)
 library(dr4pl)
 library(magrittr)
 library(hdf5r)
-library(fuzzyjoin)
 
 
 # script takes the name of the directory where data is stored as arg
@@ -67,7 +66,7 @@ skipped <- data.table::fread(path_skipped) %>%
                 rep = Replicate,
                 pool_id = Pool,
                 plate = pert_plate_src) %>%
-  dplyr::distinct(plate, pert_mfc_id, pert_well, pert_dose, rep, pool_id)
+  dplyr::distinct(plate, pert_mfc_id, pert_well, rep, pool_id)
 
 # read in logMFI data
 PR500 <- read_hdf5(path_500)
@@ -129,16 +128,10 @@ master_logMFI <- PR500_molten %>%
 master_logMFI$pert_type[which(master_logMFI$pert_type == "trt_poscon.es")] <-
   "trt_cp"
 
-# for joining to table of skipped (if different exact numbers)
-dose <- dplyr::distinct(master_logMFI, pert_dose, pert_idose)
-skipped %<>%
-  fuzzyjoin::difference_left_join(dose, max_dist = 0.01) %>%
-  dplyr::select(-pert_dose.x, -pert_dose.y)
-
 # remove pools that were skipped
 master_logMFI %<>%
-  tidyr::separate(profile_id, 
-                  c("plate", "ignore", "ignore2", "rep", "ignore3"), "_", 
+  tidyr::separate(profile_id,
+                  c("plate", "ignore", "ignore2", "rep", "ignore3"), "_",
                   remove = FALSE) %>%
   dplyr::select(-ignore, -ignore2, -ignore3)
 
