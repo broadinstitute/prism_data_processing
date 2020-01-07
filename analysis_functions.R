@@ -1,11 +1,8 @@
-# Helper functions for MTS biomarker analyses
-
 library(plyr)
 library(tidyverse)
 library(magrittr)
 library(tidyr)
 library(tibble)
-library(glmnet)
 library(ranger)
 library(glmnet)
 library(sandwich)
@@ -22,7 +19,7 @@ correlate <- function(X, y, max_features) {
   # shared cell lines (feature matrix and results)
   overlap <- intersect(rownames(X), names(y))
 
-  if (length(overlap) <= 10) {
+  if (length(overlap) <= 10 & !all(is.na(y[overlap]))) {
     return(tibble())
   }
 
@@ -32,7 +29,8 @@ correlate <- function(X, y, max_features) {
   top_n <- top_n[, apply(top_n, 2, function(x) var(x, na.rm = TRUE)) > 0]
   y <- scale(y)[,1]
 
-  corr_table <- tibble(feature = colnames(top_n),
+  corr_table <- tryCatch(expr = {
+    tibble(feature = colnames(top_n),
                        coeff = apply(top_n, 2, function(x) {
                          m = lm(y ~ x, data = data.frame(y = y[overlap],
                                                          x = x))
@@ -47,7 +45,11 @@ correlate <- function(X, y, max_features) {
                                                                  type = "HC1"))
                          return(l[2, 4])
                        })
-  )
+           )
+  }, error = function(e) {
+    print(paste("Unable to correlate: ", e))
+    return(tibble())
+  })
 
   if (length(corr_table) < 1) {
     return(corr_table)
@@ -162,7 +164,7 @@ multivariate <- function(X, y, k = 10, n = 250){
     # generate predictions and get variable importances
     if(!is.null(enet)) {
       yhat_enet[test] <-
-        predict.cv.glmnet(enet, newx = X_test[, colnames(X_train)])
+        predict(enet, newx = X_test[, colnames(X_train)])
       a <- coef(enet)
     } else {
       yhat_enet[test] <- NA
@@ -175,7 +177,7 @@ multivariate <- function(X, y, k = 10, n = 250){
     ss <- tibble(feature = names(rf$variable.importance),
                  RF.imp = rf$variable.importance / sum(rf$variable.importance),
                  RF.mse = mean((yhat_rf[test] - y[test])^2)
-                 )
+    )
     if(!is.null(enet)) {
       ss %<>%
         dplyr::full_join(tibble(feature = a@Dimnames[[1]][a@i+1],
@@ -213,12 +215,12 @@ multivariate <- function(X, y, k = 10, n = 250){
   # table ofrf model level statistics
   rf_mod <- RF.table %>%
     dplyr::mutate(MSE = mean(dplyr::distinct(SS, RF.mse, fold)$RF.mse,
-                                na.rm =T),
+                             na.rm =T),
                   MSE.se = sd(dplyr::distinct(SS, RF.mse, fold)$RF.mse,
-                                 na.rm = T),
+                              na.rm = T),
                   R2 = 1 - MSE/var(y[1:(k*N)], na.rm = T),
                   PearsonScore = cor(y[1:(k*N)], yhat_rf[1:(k*N)],
-                                        use = "pairwise.complete.obs")) %>%
+                                     use = "pairwise.complete.obs")) %>%
     dplyr::distinct(MSE, MSE.se, R2, PearsonScore) %>%
     dplyr::mutate(type = "RF")
 
@@ -259,4 +261,51 @@ multivariate <- function(X, y, k = 10, n = 250){
 
 
   return(list(RF.table, enet.table, model_table, yhat_rf, yhat_enet))
+}
+
+# function to correlate a vector y with a matrix X using only the top features
+correlate_regressed <- function(X, y, regressors, max_features) {
+
+  # shared cell lines (feature matrix and results)
+  overlap <- intersect(rownames(X), names(y))
+
+  if (length(overlap) <= 10) {
+    return(tibble())
+  }
+
+  # correlate and filter top n by effect size
+  corr_mat <- cor(X[overlap,], y[overlap], use = "pairwise.complete.obs")
+  top_n <- scale(X[overlap, rank(-abs(corr_mat)) <= 2 * max_features])
+  top_n <- top_n[, apply(top_n, 2, function(x) var(x, na.rm = TRUE)) > 0]
+  y <- scale(y)[,1]
+  R <- regressors[overlap,]
+
+  corr_table <- tibble(feature = colnames(top_n),
+                       coeff = apply(top_n, 2, function(x) {
+                         m = lm(y[overlap] ~ x + R)
+                         coef(m)[['x']]
+                       }),
+                       p.val = apply(top_n, 2, function(x) {
+                         m = lm(y[overlap] ~ x + R)
+                         l = lmtest::coeftest(m,
+                                              vcov =
+                                                sandwich::vcovHC(m,
+                                                                 type = "HC1"))
+                         return(l[2, 4])
+                       })
+  )
+
+  if (length(corr_table) < 1) {
+    return(corr_table)
+  }
+
+  # calculate q values
+  corr_table %<>%
+    dplyr::arrange(desc(abs(coeff))) %>%
+    dplyr::mutate(rank = 1:n()) %>%
+    dplyr::mutate(q.val = p.adjust(c(p.val,rep(1, ncol(X) - ncol(top_n))),
+                                   method = "BH")[1:ncol(top_n)]) %>%
+    dplyr::filter(rank <= max_features)
+
+  return(corr_table)
 }
