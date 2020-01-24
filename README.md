@@ -41,7 +41,19 @@ Steps of pre-processing outlined in [`MTS_pipeline.md`](./MTS_pipeline.md)
 
 Generates biomarker analysis for the processed data, including, univariate and multivariate analyses. Requires a directory of expression data (RNA, mutations, etc.) and the results of `MTS_Data_Processing.R`. See below for more details on each analysis function. Relies on `analysis_functions.R`.
 
-Note: it is recommended to use this script over individual analyses as it has the most up to date methods. To run a single analysis (e.g. correlation of a feature like dependency score with an assay result like AUC), use the `correlate`, `discrete_test`, or `multivariate` functions in `analysis_functions.R`.
+**NOTE:** in order to run biomarker analysis, files containing omics data for cell lines must be downloaded from [DepMap](https://depmap.org/portal/download/all/). In particular we recommend the latest versions of:
+- `Achilles_gene_effect.csv` (CRISPR dependencies)
+- `CCLE_expression.csv` (gene expression)
+- `primary-screen-replicate-collapsed-logfold-change.csv` (repurposing)
+- `D2_Achilles_gene_dep_scores.csv` (shRNA)
+- `CCLE_metabolomics_20190502.csv` (metablomics)
+- `CCLE_RPPA_20181003.csv` (proteomics)
+- `CCLE_miRNA_20181103.gct` (miRNA)
+- `CCLE_gene_cn.csv` (copy number)
+- `CCLE_mutations.csv` (mutations)
+- `sample_info.csv` (lineages)
+
+Once these files are downloaded, use [`biomarker_tables.R`](src/biomarker_tables.R) to convert tables to matrix form (this may require tweaking due to changes in file structures). This R script also generates two combined datasets: `x-ccle.csv` and `x-all.csv`. These are used for multivariate models and are based on CCLE data and all DepMap data respectively.
 
 ### [`MTS_functions.R`](src/MTS_functions.R) and [`analysis_functions.R`](src/analysis_functions.R)
 

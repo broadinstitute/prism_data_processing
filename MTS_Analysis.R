@@ -26,7 +26,7 @@ XPR <- data.table::fread(paste0(expression_dir, "/xpr.csv")) %>%  # CRISPR KO
   as.matrix(., rownames = "V1")
 LIN <- data.table::fread(paste0(expression_dir, "/lin.csv")) %>%  # lineage
   as.matrix(., rownames = "V1")
-shRNA <- data.table::fread(paste0(expression_dir, "/shrna.csv")) %>%  # lineage
+shRNA <- data.table::fread(paste0(expression_dir, "/shrna.csv")) %>%  # shRNA
   as.matrix(., rownames = "V1")
 repurposing <- data.table::fread(paste0(expression_dir, "/rep.csv")) %>%  # repurposing
   as.matrix(., rownames = "V1")
