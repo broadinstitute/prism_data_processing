@@ -18,9 +18,9 @@ shRNA <- data.table::fread(paste0(expression_dir, "/shrna.csv"))
 repurposing <- data.table::fread(paste0(expression_dir, "/rep.csv"))
 
 
-# data table mapping depmap to arxspan id
+# data table mapping depmap to ccle id
 name_map <- LIN %>%
-  dplyr::select(DepMap_ID, CCLE_Name)
+  dplyr::select(DepMap_ID, CCLE_Name) %>%
   dplyr::rename(ccle_name = CCLE_Name, broad_id = DepMap_ID) %>%
   dplyr::distinct(ccle_name, broad_id)
 cell_lines <- data.table::fread(paste0(response_dir, "/logMFI.csv")) %>%
@@ -30,7 +30,7 @@ cell_lines <- data.table::fread(paste0(response_dir, "/logMFI.csv")) %>%
 
 # for each table:
 # 1) rename columns (add feature abbreviation to front)
-# 2) rename rows by joining with name tables
+# 2) rename rows by joining with name tables (so that all are ccle_names)
 
 # shRNA
 shRNA <- t(shRNA)
@@ -61,8 +61,8 @@ MET <- as_tibble(MET, rownames = "broad_id") %>%
   column_to_rownames("ccle_name")
 
 # protein expression
-colnames(RPPA) <- paste("RPPA", colnames(RPPA), sep = "_")
-RPPA <- as_tibble(RPPA, rownames = "broad_id") %>%
+colnames(PROT) <- paste("PROT", colnames(PROT), sep = "_")
+PROT <- as_tibble(PROT, rownames = "broad_id") %>%
   dplyr::distinct() %>%
   dplyr::inner_join(cell_lines) %>%
   dplyr::select(-broad_id) %>%
@@ -115,45 +115,35 @@ CNA <- as_tibble(CNA, rownames = "broad_id") %>%
   column_to_rownames("ccle_name")
 
 # mutations (damaging, hotspot, other)
-colnames(damMUT) <- paste("MUT_dam", word(colnames(damMUT), 1, sep = " "), sep = "_")
-damMUT <- as_tibble(damMUT, rownames = "broad_id", .name_repair = make.names) %>%
-  dplyr::distinct() %>%
+hs_MUT <- MUT %>%
+  dplyr::rename(broad_id = DepMap_ID) %>%
   dplyr::inner_join(cell_lines) %>%
-  dplyr::select(-broad_id) %>%
-  dplyr::distinct()
-colnames(hsMUT) <- paste("MUT_hs", word(colnames(hsMUT), 1, sep = " "), sep = "_")
-hsMUT <- as_tibble(hsMUT, rownames = "broad_id", .name_repair = make.names) %>%
-  dplyr::distinct() %>%
+  dplyr::filter(isTCGAhotspot | isCOSMIChotspot) %>%
+  dplyr::mutate(has_mut = 1,
+                mutation = paste("hs", Hugo_Symbol, sep = "_")) %>%
+  reshape2::acast(ccle_name ~ mutation, value.var = "has_mut", fill = 0, fun.aggregate = max)
+dam_MUT <- MUT %>%
+  dplyr::rename(broad_id = DepMap_ID) %>%
   dplyr::inner_join(cell_lines) %>%
-  dplyr::select(-broad_id) %>%
-  dplyr::distinct()
-colnames(otherMUT) <- paste("MUT_other", word(colnames(otherMUT), 1, sep = " "), sep = "_")
-otherMUT <- as_tibble(otherMUT, rownames = "broad_id", .name_repair = make.names) %>%
-  dplyr::distinct() %>%
+  dplyr::filter(Variant_annotation == "damaging") %>%
+  dplyr::mutate(has_mut = 1,
+                mutation = paste("dam", Hugo_Symbol, sep = "_")) %>%
+  reshape2::acast(ccle_name ~ mutation, value.var = "has_mut", fill = 0, fun.aggregate = max)
+other_MUT <- MUT %>%
+  dplyr::rename(broad_id = DepMap_ID) %>%
   dplyr::inner_join(cell_lines) %>%
-  dplyr::select(-broad_id) %>%
-  dplyr::distinct()
-MUT <- dplyr::inner_join(damMUT, hsMUT) %>%
-  dplyr::inner_join(otherMUT) %>%
-  column_to_rownames("ccle_name")
+  dplyr::filter(!Variant_annotation %in% c("damaging", "silent")) %>%
+  dplyr::mutate(has_mut = 1,
+                mutation = paste("other", Hugo_Symbol, sep = "_")) %>%
+  reshape2::acast(ccle_name ~ mutation, value.var = "has_mut", fill = 0, fun.aggregate = max)
+overlap <- intersect(intersect(rownames(hs_MUT), rownames(dam_MUT)),
+                     rownames(other_MUT))
+MUT <- cbind(hs_MUT[overlap, ], dam_MUT[overlap, ], other_MUT[overlap, ])
 
 # repurposing
 rep_info %<>% column_to_rownames(var = "column_name")
 colnames(REP) <- paste("REP", rep_info[colnames(REP), ]$name, sep = "_")
 REP <- as_tibble(REP, rownames = "broad_id", .name_repair = make.names) %>%
-  dplyr::distinct() %>%
-  dplyr::inner_join(cell_lines) %>%
-  dplyr::select(-broad_id) %>%
-  dplyr::distinct() %>%
-  column_to_rownames("ccle_name")
-
-# total proteome
-prots <- PROT$Uniprot
-PROT %<>% dplyr::select(-c(1:4), -c(6:48))
-colnames(PROT) <- word(colnames(PROT), start = 1, end = -2, sep = "_")
-PROT <- t(PROT[,-1])
-colnames(PROT) <- paste("PROT", prots, sep = "_")
-PROT <- as_tibble(PROT, rownames = "ccle_name", .name_repair = make.names) %>%
   dplyr::distinct() %>%
   dplyr::inner_join(cell_lines) %>%
   dplyr::select(-broad_id) %>%
@@ -169,7 +159,6 @@ CNA <- CNA[, apply(CNA, 2, function(x) var(x, na.rm = TRUE)) > 0]
 XPR <- XPR[, apply(XPR, 2, function(x) var(x, na.rm = TRUE)) > 0]
 LIN <- LIN[, apply(LIN, 2, function(x) var(x, na.rm = TRUE)) > 0]
 miRNA <- miRNA[, apply(miRNA, 2, function(x) var(x, na.rm = TRUE)) > 0]
-RPPA <- RPPA[, apply(RPPA, 2, function(x) var(x, na.rm = TRUE)) > 0]
 MET <- MET[, apply(MET, 2, function(x) var(x, na.rm = TRUE)) > 0]
 REP <- REP[, apply(REP, 2, function(x) var(x, na.rm = TRUE)) > 0]
 PROT <- PROT[, apply(PROT, 2, function(x) var(x, na.rm = TRUE)) > 0]
