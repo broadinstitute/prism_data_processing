@@ -1,22 +1,19 @@
 <p align="center">
-  <img src="BroadInstLogoforDigitalRGB.png" width="300" hspace="40"/>
-  <img src="prism_logo_tagline_side.png" width="400" />
+  <img src="misc/BroadInstLogoforDigitalRGB.png" width="300" hspace="40"/>
+  <img src="misc/prism_logo_tagline_side.png" width="400" />
 </p>
 
 # Prism Data Processing
 
 Public version of the data processing pipeline for PRISM medium throughput screens (MTS). For use by collaborators to regenerate tables and plots correlating drug response to cell line features. Public cell line data for equivalent analysis is available on the [DepMap Portal](https://depmap.org/portal/).
 
-This repository contains 6 primary scripts:
+This repository contains 3 primary scripts:
 
 1. `make_logMFI.R`
 2. `MTS_Data_Processing.R`
 3. `MTS_Analysis.R`
-4. `Univariate_Continuous.R`
-5. `Univariate_Discrete.R`
-6. `Multivariate.R`
 
-**FIRST** run [`requirements.R`](./requirements.R) either in RStudio or terminal to install  packages required for analysis. For shell execute:
+**FIRST** run [`requirements.R`](src/requirements.R) either in RStudio or terminal to install  packages required for analysis. For shell execute:
 ```bash
 $ Rscript requirements.R
 ```
@@ -46,7 +43,7 @@ Generates biomarker analysis for the processed data, including, univariate and m
 
 Note: it is recommended to use this script over individual analyses as it has the most up to date methods. To run a single analysis (e.g. correlation of a feature like dependency score with an assay result like AUC), use the `correlate`, `discrete_test`, or `multivariate` functions in `analysis_functions.R`.
 
-### [`MTS_functions.R`](./MTS_functions.R) and [`analysis_functions.R`](./analysis_functions.R)
+### [`MTS_functions.R`](src/MTS_functions.R) and [`analysis_functions.R`](src/analysis_functions.R)
 
 These files contain helper functions used in the scripts above and are sourced at the beginning of each (to install necessary packages and define functions). `analysis_functions.R` contains functions used in `MTS_Analysis.R` to generate biomarker analyses, while `MTS_functions.R` contains functions used in `MTS_Data_Processing.R`.
 

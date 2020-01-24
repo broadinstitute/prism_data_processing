@@ -1,5 +1,6 @@
 # script to take raw data and make logMFI csv
 
+#---- Libraries and Functions ----
 library(dplyr)
 library(data.table)
 library(tidyverse)
@@ -7,26 +8,6 @@ library(readr)
 library(dr4pl)
 library(magrittr)
 library(hdf5r)
-
-
-# script takes the name of the directory where data is stored as arg
-script_args <- commandArgs(trailingOnly = TRUE)
-if (length(script_args) == 0) {
-  stop("Please supply path to data directory", call. = FALSE)
-}
-
-# directory with data (also where new folders will be created)
-base_dir <- script_args[1]
-
-# paths to data (make sure directory of data has these files)
-path_500 <- paste0(base_dir,"/PR500_LMFI.gctx")
-path_300 <- paste0(base_dir,"/PR300_LMFI.gctx")
-path_cell_info_500 <- paste0(base_dir,"/PR500_cell_info.txt")
-path_cell_info_300 <- paste0(base_dir,"/PR300_cell_info.txt")
-path_inst_info_500 <- paste0(base_dir,"/PR500_inst_info.txt")
-path_inst_info_300 <- paste0(base_dir,"/PR300_inst_info.txt")
-path_skipped <- paste0(base_dir, "/skipped_wells.csv")  # if this data exists
-
 
 # HDF5 file reader
 read_hdf5 = function (filename, index = NULL) {
@@ -52,8 +33,25 @@ read_hdf5 = function (filename, index = NULL) {
   return(data_matrix)
 }
 
-
 #---- Load the data ----
+
+# script takes the name of the directory where data is stored as arg
+script_args <- commandArgs(trailingOnly = TRUE)
+if (length(script_args) == 0) {
+  stop("Please supply path to data directory", call. = FALSE)
+}
+
+# directory with data (also where new folders will be created)
+base_dir <- script_args[1]
+
+# paths to data (make sure directory of data has these files)
+path_500 <- paste0(base_dir,"/PR500_LMFI.gctx")
+path_300 <- paste0(base_dir,"/PR300_LMFI.gctx")
+path_cell_info_500 <- paste0(base_dir,"/PR500_cell_info.txt")
+path_cell_info_300 <- paste0(base_dir,"/PR300_cell_info.txt")
+path_inst_info_500 <- paste0(base_dir,"/PR500_inst_info.txt")
+path_inst_info_300 <- paste0(base_dir,"/PR300_inst_info.txt")
+path_skipped <- paste0(base_dir, "/skipped_wells.csv")  # if this data exists
 
 # data table linking drugs to projects (collaborators)
 key_table <- data.table::fread(path_key)
@@ -103,6 +101,8 @@ inst_info_300 <- data.table::fread(path_inst_info_300) %>%
 # ensure unique profile IDs
 PR500 <- PR500[, inst_info_500$profile_id %>% unique()]
 PR300 <- PR300[, inst_info_300$profile_id %>% unique()]
+
+#---- Combine tables ----
 
 # melt matrices into data tables and join with inst and cell info
 PR500_molten <- log2(PR500) %>%

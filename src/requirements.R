@@ -1,4 +1,5 @@
 # packages required for pipeline
+options(repos=structure(c(CRAN="http://cran.r-project.org")))
 
 install.packages(c("tidyverse",
                    "useful",
@@ -6,11 +7,12 @@ install.packages(c("tidyverse",
                    "scam",
                    "dr4pl",
                    "readr",
-                   "sva",
                    "ranger",
                    "glmnet",
                    "sandwich",
-                   "plyr",
-                   "reshape2",
-                   "lmtest")
+                   "BiocManager",
+                   "PRROC")
                  )
+
+BiocManager::install()
+BiocManager::install("sva")
