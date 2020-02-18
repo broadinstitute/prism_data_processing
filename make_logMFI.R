@@ -53,18 +53,18 @@ path_inst_info_500 <- paste0(base_dir,"/PR500_inst_info.txt")
 path_inst_info_300 <- paste0(base_dir,"/PR300_inst_info.txt")
 path_skipped <- paste0(base_dir, "/skipped_wells.csv")  # if this data exists
 
-# data table linking drugs to projects (collaborators)
-key_table <- data.table::fread(path_key)
-
 # data table of skipped wells (make sure pool ids are 3 digits)
-skipped <- data.table::fread(path_skipped) %>%
-  dplyr::rename(pert_mfc_id = broad_sample,
-                pert_well = `Wells Skipped`,
-                pert_dose = mmoles_per_liter,
-                rep = Replicate,
-                pool_id = Pool,
-                plate = pert_plate_src) %>%
-  dplyr::distinct(plate, pert_mfc_id, pert_well, rep, pool_id)
+skipped <- tryCatch(expr = {data.table::fread(path_skipped) %>%
+    dplyr::rename(pert_mfc_id = broad_sample,
+                  pert_well = `Wells Skipped`,
+                  pert_dose = mmoles_per_liter,
+                  rep = Replicate,
+                  pool_id = Pool,
+                  plate = pert_plate_src) %>%
+    dplyr::distinct(plate, pert_mfc_id, pert_well, rep, pool_id)
+}, error = function(e) {
+  return(tibble())
+})
 
 # read in logMFI data
 PR500 <- read_hdf5(path_500)
@@ -128,17 +128,18 @@ master_logMFI <- PR500_molten %>%
 master_logMFI$pert_type[which(master_logMFI$pert_type == "trt_poscon.es")] <-
   "trt_cp"
 
-# remove pools that were skipped
-master_logMFI %<>%
-  tidyr::separate(profile_id,
-                  c("plate", "ignore", "ignore2", "rep", "ignore3"), "_",
-                  remove = FALSE) %>%
-  dplyr::select(-ignore, -ignore2, -ignore3)
-
-master_logMFI$rep <- substr(master_logMFI$rep, 1, 2)
-
-master_logMFI %<>%
-  dplyr::anti_join(skipped) %>%
-  dplyr::select(-plate, -rep)
+if(nrow(skipped > 0)) {
+  # remove pools that were skipped
+  master_logMFI %<>%
+    tidyr::separate(profile_id,
+                    c("plate", "ignore", "ignore2", "rep", "ignore3"), "_",
+                    remove = FALSE) %>%
+    dplyr::select(-ignore, -ignore2, -ignore3)
+  
+  master_logMFI$rep <- substr(master_logMFI$rep, 1, 2)
+  master_logMFI %<>%
+    dplyr::anti_join(skipped) %>%
+    dplyr::select(-plate, -rep)
+}
 
 readr::write_csv(master_logMFI, paste0(base_dir, "/logMFI.csv"))
