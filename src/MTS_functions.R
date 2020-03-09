@@ -15,7 +15,7 @@ library(dplyr)
 
 #---- Normalization ----
 # calculate control barcode medians
-control_medians <- function(X, control) {
+control_medians <- function(X) {
   ref <- X %>%
     dplyr::filter(pert_type == "ctl_vehicle") %>%  # look at controls
     dplyr::group_by(prism_replicate, pert_well) %>%
@@ -24,7 +24,7 @@ control_medians <- function(X, control) {
     dplyr::mutate(mmLMFI = logMFI - mLMFI + median(mLMFI)) %>%  # normalized value for rep
     dplyr::summarize(rLMFI = median(mmLMFI)) %>%  # median normalized value across reps
     dplyr::left_join(X)
-  
+
   return(ref)
 }
 
@@ -39,7 +39,7 @@ normalize <- function(X, barcodes) {
                     predict(newdata = tibble(x = logMFI))) %>%
     dplyr::ungroup() %>%
     dplyr::select(-logMFI)
-  
+
   return(normalized)
 }
 
@@ -71,7 +71,7 @@ calc_ssmd <- function(X) {
     dplyr::mutate(ssmd = (ctl_vehicle_md - trt_poscon_md) /
                     sqrt(ctl_vehicle_mad^2 +trt_poscon_mad^2),
                   nnmd = (ctl_vehicle_md - trt_poscon_md) / ctl_vehicle_mad)
-  
+
   return(SSMD_table)
 }
 
@@ -119,13 +119,13 @@ apply_combat <- function(Y) {
     dplyr::distinct(ccle_name, prism_replicate, LFC, culture, pool_id) %>%
     tidyr::unite(cond, culture, pool_id, prism_replicate, sep = "::") %>%
     dplyr::filter(is.finite(LFC))
-  
+
   batch <- df$cond
   m <- rbind(df$LFC,
              rnorm(length(df$LFC),
                    mean =  mean(df$LFC, na.rm = TRUE),
                    sd = sd(df$LFC, na.rm = TRUE)))
-  
+
   combat <- sva::ComBat(dat = m, batch = batch) %>%
     t() %>%
     as.data.frame() %>%
@@ -135,7 +135,7 @@ apply_combat <- function(Y) {
                   pool_id = stringr::word(cond, 2, sep = stringr::fixed("::")),
                   prism_replicate = stringr::word(cond, 3, sep = stringr::fixed("::"))) %>%
     dplyr::select(-cond, -V2)
-  
+
   Y %>%
     dplyr::left_join(combat) %>%
     .$LFC.cb
