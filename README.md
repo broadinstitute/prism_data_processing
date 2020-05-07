@@ -5,7 +5,9 @@
 
 # Prism Data Processing
 
-Public version of the data processing pipeline for PRISM medium throughput screens (MTS). For use by collaborators to regenerate tables and plots correlating drug response to cell line features. Public cell line data for equivalent analysis is available on the [DepMap Portal](https://depmap.org/portal/).
+Public version of the data processing pipeline for [PRISM](https://www.theprismlab.org/) medium throughput screens (MTS). For use by collaborators to regenerate tables and plots correlating drug response to cell line features. Public cell line data for equivalent analysis is available on the [DepMap Portal](https://depmap.org/portal/).
+
+For only biomarker analysis see the `cdsr_biomarker` [package](https://github.com/broadinstitute/cdsr_biomarker).
 
 This repository contains 3 primary scripts:
 
@@ -13,12 +15,13 @@ This repository contains 3 primary scripts:
 2. `MTS_Data_Processing.R`
 3. `MTS_Analysis.R`
 
-**FIRST** run [`requirements.R`](src/requirements.R) either in RStudio or terminal to install  packages required for analysis. For shell execute:
+**FIRST** run `setup.R` either in RStudio or terminal to install  packages required for analysis. For shell execute:
 ```bash
-$ Rscript requirements.R
+$ cd ./prism_data_processing
+$ Rscript src/setup.R
 ```
 
-### [`make_logMFI.R`](./make_logMFI.R)
+### `make_logMFI.R`
 Only necessary for processing raw files downloaded from [clue.io](https://clue.io/).
 
 Converts raw .gctx and .txt files downloaded from clue.io to readable logMFI.csv. This file contains raw log2 median fluorescence intensity (MFI) data for each cell line at each treatment. Requires:
@@ -30,14 +33,14 @@ Converts raw .gctx and .txt files downloaded from clue.io to readable logMFI.csv
 - `PR500_cell_info.txt`: cell line info for PR500
 - `skipped_wells.csv`: file indicating which wells did not receive compound (optional)
 
-### [`MTS_Data_Processing.R`](./MTS_Data_Processing.R)
+### `MTS_Data_Processing.R`
 
 Does pre-processing based on raw median fluorescent intensity (MFI) values and generates tables with data on QC, viabilities, and dose-response parameters, as well as figures showing dose response curves.
 
 Steps of pre-processing outlined in [`MTS_pipeline.md`](./MTS_pipeline.md)
 
 
-### [`MTS_Analysis.R`](./MTS_Analysis.R)
+### `MTS_Analysis.R`
 
 Generates biomarker analysis for the processed data, including, univariate and multivariate analyses. Requires a directory of expression data (RNA, mutations, etc.) and the results of `MTS_Data_Processing.R`. See below for more details on each analysis function. Relies on `analysis_functions.R`.
 
@@ -55,7 +58,7 @@ Generates biomarker analysis for the processed data, including, univariate and m
 
 Once these files are downloaded, use [`biomarker_tables.R`](src/biomarker_tables.R) to convert tables to matrix form (this may require tweaking due to changes in file structures). This R script also generates two combined datasets: `x-ccle.csv` and `x-all.csv`. These are used for multivariate models and are based on CCLE data and all DepMap data respectively.
 
-### [`MTS_functions.R`](src/MTS_functions.R) and [`analysis_functions.R`](src/analysis_functions.R)
+### `MTS_functions.R` and `analysis_functions.R`
 
 These files contain helper functions used in the scripts above and are sourced at the beginning of each (to install necessary packages and define functions). `analysis_functions.R` contains functions used in `MTS_Analysis.R` to generate biomarker analyses, while `MTS_functions.R` contains functions used in `MTS_Data_Processing.R`.
 

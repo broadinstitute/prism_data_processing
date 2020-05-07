@@ -4,130 +4,189 @@
 library(plyr)
 library(tidyverse)
 library(magrittr)
-library(tidyr)
-library(tibble)
-library(glmnet)
 library(ranger)
-library(glmnet)
 library(sandwich)
-library(stats)
 library(reshape2)
-library(dplyr)
 library(lmtest)
+library(limma)
+library(corpcor)
+library(ashr)
+library(gmodels)
 
-
-#---- Conitnuous variables biomarkers ----
-# function to correlate a vector y with a matrix X using only the top features
-correlate <- function(X, y, max_features) {
+#---- Continuous ----
+# correlation function
+lin_associations = function(A, y, W = NULL, robust.se = F, 
+                            scale.A = T, scale.y = F, is.dependent = T,
+                            var.th = 0, coef.var = F){
   
-  # shared cell lines (feature matrix and results)
-  overlap <- intersect(rownames(X), names(y))
+  mean.na = function(x) mean(x, na.rm = T)
   
-  if (length(overlap) <= 10 & !all(is.na(y[overlap]))) {
-    return(tibble())
+  overlap <- intersect(rownames(A), names(y))
+  if(!is.null(W)) {
+    overlap <- intersect(rownames(W), overlap)
+    W <- W[overlap,]
   }
+  y <- y[overlap]; A <- A[overlap,]
   
-  # correlate and filter top n by effect size
-  corr_mat <- cor(X[overlap,], y[overlap], use = "pairwise.complete.obs")
-  top_n <- scale(X[overlap, rank(-abs(corr_mat)) <= max_features])
-  top_n <- top_n[, apply(top_n, 2, function(x) var(x, na.rm = TRUE)) > 0]
-  y <- scale(y)[,1]
-  
-  corr_table <- tryCatch(expr = {
-    tibble(feature = colnames(top_n),
-           coeff = apply(top_n, 2, function(x) {
-             m = lm(y ~ x, data = data.frame(y = y[overlap],
-                                             x = x))
-             coef(m)[['x']]
-           }),
-           p.val = apply(top_n, 2, function(x) {
-             m = lm(y ~ x, data = data.frame(y = y[overlap],
-                                             x = x))
-             l = lmtest::coeftest(m,
-                                  vcov =
-                                    sandwich::vcovHC(m,
-                                                     type = "HC1"))
-             return(l[2, 4])
-           })
-    )
-  }, error = function(e) {
-    print(paste("Unable to correlate: ", e))
-    return(tibble())
-  })
-  
-  if (length(corr_table) < 1) {
-    return(corr_table)
+  N = length(y);
+  y_ = scale(y, center = T, scale = scale.y)
+  if (coef.var) {
+    A_ = A[, apply(A,2,function(x) var(x,na.rm = T)/mean(x,na.rm = T)^2) > var.th]
+    A_ = scale(A_, center = T, scale = scale.A)
+  } else {
+    A_ = A[, apply(A,2,function(x) var(x,na.rm = T)) > var.th]
+    A_ = scale(A_, center = T, scale = scale.A)
   }
+  N.A = apply(A_, 2, function(x) sum(is.finite(x)))
   
-  # calculate q values
-  corr_table %<>%
-    dplyr::arrange(desc(abs(coeff))) %>%
-    dplyr::mutate(rank = 1:n()) %>%
-    dplyr::mutate(q.val = p.adjust(c(p.val,rep(1, ncol(X) - ncol(top_n))),
-                                   method = "BH")[1:ncol(top_n)])
   
-  return(corr_table)
+  if(is.null(W)) {
+    W_ = matrix(rep(1,N))
+  } else {
+    W_ = cbind(W, rep(1,N))}
+  
+  
+  P = diag(rep(1,N)) -  W_ %*% corpcor::pseudoinverse(t(W_) %*% W_) %*% t(W_)
+  y_ = c(P %*% y_)
+  
+  A.NA = !is.finite(A_)
+  A_ = A_; A_[A.NA] = 0
+  A_ = P %*% A_; A_[A.NA] = NA
+  
+  
+  if(is.dependent){
+    K = apply(A_^2, 2, mean.na) 
+    beta.hat =  apply(A_ * y_, 2, mean.na) / K; 
+    eps.hat = y_ - t(t(A_)* beta.hat)
+  } else {
+    K = apply((A_ < Inf) * y_^2, 2, mean.na)
+    beta.hat =  apply(A_ * y_, 2,  mean.na) / K; 
+    eps.hat = A_ - as.matrix(y_) %*% t(beta.hat)}
+  
+  if(!robust.se){
+    res = tibble::tibble(feature = colnames(A_),
+                         beta.hat = beta.hat,
+                         beta.se = sqrt(apply(eps.hat^2, 2, mean.na) / K / (N.A - 1 - dim(W_)[2])),
+                         p.val = 2*pnorm(-abs(beta.hat / beta.se)),
+                         q.val.BH = p.adjust(p.val, method = "BH"), 
+                         n = N.A)
+  } else{
+    res = tibble::tibble(feature = colnames(A_),
+                         beta.hat = beta.hat,
+                         beta.se = sqrt(apply(A_^2 * eps.hat^2, 2, mean.na) / (N.A - 1 - dim(W_)[2]))/K , 
+                         p.val = 2*pnorm(-abs(beta.hat / beta.se)),
+                         q.val.BH = p.adjust(p.val, method = "BH"),
+                         n = N.A)}
+  
+  res$beta.se[res$beta.se < .000001] <- .000001 # deals with bug in ash
+  res = dplyr::bind_cols(res[,c(1,4,5,6)], 
+                         ashr::ash(res$beta.hat, res$beta.se)$result[,c(1,2,7,8,9,10)])
+  
+  res %<>%dplyr::mutate(z.score = PosteriorMean/PosteriorSD)
+  
+  return(res)
 }
 
-
 #---- Discrete variables biomarkers ----
+# function to run limma on a matrix  (helper function for discrete test)
+run_lm_stats_limma <- function(mat, vec, covars = NULL, weights = NULL,
+                               target_type = 'Gene', limma_trend = FALSE) {
+  udata <- which(!is.na(vec))
+  if (!is.numeric(vec)) {
+    pred <- factor(vec[udata])
+    stopifnot(length(levels(pred)) == 2) #only two group comparisons implemented so far
+    n_out <- colSums(!is.na(mat[udata[pred == levels(pred)[1]],,drop=F]))
+    n_in <- colSums(!is.na(mat[udata[pred == levels(pred)[2]],,drop=F]))
+    min_samples <- pmin(n_out, n_in) %>% set_names(colnames(mat))
+  } else {
+    pred <- vec[udata]
+    min_samples <- colSums(!is.na(mat[udata,]))
+  }
+  #there must be more than one unique value of the independent variable
+  if (length(unique(pred)) <= 1) {
+    return(NULL)
+  }
+  #if using covariates add them as additional predictors to the model
+  if (!is.null(covars)) {
+    if (!is.data.frame(covars)) {
+      covars <- data.frame(covars)
+    }
+    combined <- covars[udata,, drop = FALSE]
+    combined[['pred']] <- pred
+    form <- as.formula(paste('~', paste0(colnames(combined), collapse = ' + ')))
+    design <- model.matrix(form, combined)
+    design <- design[, colSums(design) != 0, drop = FALSE]
+  } else {
+    design <- model.matrix(~pred)
+  }
+  if (!is.null(weights)) {
+    if (is.matrix(weights)) {
+      weights <- t(weights[udata,])
+    } else{
+      weights <- weights[udata]
+    }
+  }
+  fit <- limma::lmFit(t(mat[udata,]), design, weights = weights)
+  fit <- limma::eBayes(fit, trend = limma_trend)
+  targ_coef <- grep('pred', colnames(design), value = TRUE)
+  results <- limma::topTable(fit, coef = targ_coef, number = Inf)
+  
+  if (colnames(results)[1] == 'ID') {
+    colnames(results)[1] <- target_type
+  } else {
+    results %<>% rownames_to_column(var = target_type)
+  }
+  results$min_samples <- min_samples[results[[target_type]]]
+  
+  two_to_one_sided <- function(two_sided_p, stat, test_dir) {
+    #helper function for converting two-sided p-values to one-sided p-values
+    one_sided_p <- two_sided_p / 2
+    if (test_dir == 'right') {
+      one_sided_p[stat < 0] <- 1 - one_sided_p[stat < 0]
+    } else {
+      one_sided_p[stat > 0] <- 1 - one_sided_p[stat > 0]
+    }
+    return(one_sided_p)
+  }
+  results %<>% set_colnames(revalue(colnames(.), c('logFC' = 'EffectSize', 'AveExpr' = 'Avg', 't' = 't_stat', 'B' = 'log_odds',
+                                                   'P.Value' = 'p.value', 'adj.P.Val' = 'q.value', 'min_samples' = 'min_samples'))) %>% na.omit()
+  results %<>% dplyr::mutate(p.left = two_to_one_sided(p.value, EffectSize, 'left'),
+                             p.right = two_to_one_sided(p.value, EffectSize, 'right'),
+                             q.left = p.adjust(p.left, method = 'BH'),
+                             q.right = p.adjust(p.right, method = 'BH'))
+  return(results)
+}
+
 # funtion to run t-test for discrete variables based on viability metrics
 discrete_test <- function(X, y) {
   
-  out_table <- tibble()  # tracks output
-  feats <- colnames(X)  # features to run tests on
+  y <- y[is.finite(y)]  # only finite values
+  X <- X[, apply(X, 2, function(x) !any(is.na(x)))]
+  
   overlap <- dplyr::intersect(rownames(X), names(y))
   
   if (length(overlap) < 10) {
-    return(out_table)
+    stop("Not enough overlapping data")
   }
   
   y <- y[overlap]
   X <- X[overlap,]
   
-  # loop through each feature (e.g. lineage)
-  for (feat in feats) {
-    has_feat <- rownames(X[X[,feat] == 1,])
-    group <- y[has_feat]
-    others <- dplyr::setdiff(y, group)
-    
-    # need more than one data point to generate a group mean and test
-    if (length(group) >= 5 & length(others) >= 5) {
-      
-      # get t test results (two-sample unpaired)
-      t <- stats::t.test(group, others)
-      p_val <- t$p.value
-      t_stat <- t$statistic["t"]
-      effect_size <- mean(group) - mean(others)
-      
-      result <- tibble(feature = feat,
-                       effect_size = effect_size,
-                       t = t_stat,
-                       p = p_val
-      )
-      out_table %<>%
-        dplyr::bind_rows(result)
-    }
-  }
-  
-  if (nrow(out_table) < 1) {
-    return(out_table)
-  }
-  
-  # calculate q values (BH procedure)
-  out_table$q <- p.adjust(c(out_table$p,
-                            rep(1, length(feats) - nrow(out_table))),
-                          method = "BH")[1:nrow(out_table)]
+  out_table <- run_lm_stats_limma(X, y, target_type = "feature")
+  out_table %<>%
+    dplyr::select(feature, EffectSize, t_stat, p.value, q.value) %>%
+    dplyr::rename(effect_size = EffectSize)
   
   return(out_table)
 }
 
 
-# function to do multivariate analysis on MTS data
+#---- Multivariate ----
+# function to fit a random forest analysis to MTS data
 # takes named vector of responses (y) and feature matrix (X)
 # k = number of cross validation cycles
 # n = number of features to test for each run (e.g. top 250)
-multivariate <- function(X, y, k = 10, n = 250){
+random_forest <- function(X, y, k = 10, n = 500){
   y <- y[is.finite(y)]  # only finite values
   cl <- sample(intersect(rownames(X), names(y)))  # overlapping rows
   X <- scale(X[cl,]); y = y[cl]; N = floor(length(cl)/k)
@@ -155,47 +214,93 @@ multivariate <- function(X, y, k = 10, n = 250){
                          data = as.data.frame(cbind(X_train, y = y[train])),
                          importance = "impurity")
     
-    # # enet errors out under certain conditions
-    # enet <- tryCatch(expr = {
-    #   glmnet::cv.glmnet(x = X_train,
-    #                     y = y[train],
-    #                     alpha = .5)
-    # }, error = function(e) {
-    #   print(paste0("Warning, there was an error: ", e))
-    #   return(NULL)
-    # })
-    
-    # # generate predictions and get variable importances
-    # if(!is.null(enet)) {
-    #   yhat_enet[test] <-
-    #     predict(enet, newx = X_test[, colnames(X_train)])
-    #   a <- coef(enet)
-    # } else {
-    #   yhat_enet[test] <- NA
-    #   a <- NULL
-    # }
-    
-    enet <- NULL
-    
     yhat_rf[test] <-
       predict(rf, data = as.data.frame(X_test[, colnames(X_train)]))$predictions
     
     # get variable importance metrics for rf
     ss <- tibble(feature = names(rf$variable.importance),
                  RF.imp = rf$variable.importance / sum(rf$variable.importance),
-                 RF.mse = mean((yhat_rf[test] - y[test])^2)
-    )
+                 fold = kx)
     
-    if(!is.null(enet)) {
-      ss %<>%
-        dplyr::full_join(tibble(feature = a@Dimnames[[1]][a@i+1],
-                                enet.coef = a@x), by = "feature") %>%
-        dplyr::mutate(enet.coef = ifelse(is.na(enet.coef), 0, enet.coef),
-                      enet.mse = mean((yhat_enet[test] - y[test])^2, na.rm = T))
-    }
+    # add this model to the output
+    SS %<>%
+      dplyr::bind_rows(ss)
+  }
+  
+  RF.importances <- SS %>%
+    dplyr::distinct(feature, RF.imp, fold) %>%
+    reshape2::acast(feature ~ fold, value.var = "RF.imp")
+  
+  # average values across validation runs
+  RF.table <- tibble(feature = rownames(RF.importances),
+                     RF.imp.mean = RF.importances %>%
+                       apply(1, function(x) mean(x, na.rm = T)),
+                     RF.imp.sd = RF.importances %>%
+                       apply(1, function(x) sd(x, na.rm = T)),
+                     RF.imp.stability = RF.importances %>%
+                       apply(1, function(x) mean(!is.na(x)))) %>%
+    # only keep features used in > half the models
+    dplyr::filter((RF.imp.stability > 0.5), feature != "(Intercept)")
+  
+  # table of model level statistics
+  mse <- mean((yhat_rf - y)^2)
+  mse.se <- sqrt(var((yhat_rf - y)^2))/sqrt(length(y))
+  r2 <- 1 - (mse/var(y))
+  ps <- cor(y, yhat_rf, use = "pairwise.complete.obs")
+  model_table = tibble(MSE = mse,
+                       MSE.se = mse.se,
+                       R2 = r2,
+                       PearsonScore = ps)
+  
+  return(list(rf.fit = RF.table, mod.tab = model_table, preds = yhat_rf))
+}
+
+# modified random forest function to incorporate sample weights
+# weights passed as a named vector
+random_forest_weighted <- function(X, y, weights = NULL, k = 10, n = 500){
+  y <- y[is.finite(y)]  # only finite values
+  cl <- sample(intersect(rownames(X), names(y)))  # overlapping rows
+  X <- scale(X[cl,]); y = y[cl]; N = floor(length(cl)/k)
+  
+  # make weight vector
+  if(is.null(weights)) {
+    weights <- rep(1, length(cl))
+    names(weights) <- cl
+  }
+  W <- weights[cl]
+  
+  colnames(X) %<>% make.names()
+  yhat_rf <- y;
+  
+  SS = tibble()  # output
+  
+  # run cross validation k times
+  for (kx in 1:k) {
+    test <- cl[((kx - 1) * N + 1):(kx * N)]  # select test set
+    train <- setdiff(cl, test)  # everything else is training
+    X_train <- X[train,]
+    W_train <- W[train]
     
-    ss %<>%
-      dplyr::mutate(fold = kx)
+    # assumes no NAs in X
+    X_train <- X_train[,apply(X_train,2,var) > 0]
+    X_test <- X[test,]
+    
+    # select top n correlated features in X
+    X_train <- X_train[,rank(-abs(cor(X_train,y[train])))<= n]
+    
+    # makes RF and ENet models
+    rf <- ranger::ranger(y ~ .,
+                         data = as.data.frame(cbind(X_train, y = y[train])),
+                         case.weights = W_train,
+                         importance = "impurity")
+    
+    yhat_rf[test] <-
+      predict(rf, data = as.data.frame(X_test[, colnames(X_train)]))$predictions
+    
+    # get variable importance metrics for rf
+    ss <- tibble(feature = names(rf$variable.importance),
+                 RF.imp = (rf$variable.importance / sum(rf$variable.importance)),
+                 fold = kx)
     
     # add this model to the output
     SS %<>%
@@ -221,107 +326,16 @@ multivariate <- function(X, y, k = 10, n = 250){
     dplyr::filter((RF.imp.stability > 0.5), feature != "(Intercept)")
   
   # table ofrf model level statistics
+  mse <- sum((yhat_rf - y)^2 * W/sum(W))
+  r2 <- 1 - (mse/sum((y - mean(y))^2 * W/sum(W)))
+  ps <- cov.wt(cbind(y, yhat_rf), wt = W, cor = TRUE)$cor[1,2]
   rf_mod <- RF.table %>%
-    dplyr::mutate(MSE = mean(dplyr::distinct(SS, RF.mse, fold)$RF.mse,
-                             na.rm =T),
-                  MSE.se = sd(dplyr::distinct(SS, RF.mse, fold)$RF.mse,
-                              na.rm = T),
-                  R2 = 1 - MSE/var(y[1:(k*N)], na.rm = T),
-                  PearsonScore = cor(y[1:(k*N)], yhat_rf[1:(k*N)],
-                                     use = "pairwise.complete.obs")) %>%
-    dplyr::distinct(MSE, MSE.se, R2, PearsonScore) %>%
+    dplyr::mutate(MSE = mse, R2 = r2, PearsonScore = ps) %>%
+    dplyr::distinct(MSE, R2, PearsonScore) %>%
     dplyr::mutate(type = "RF")
   
   model_table %<>% dplyr::bind_rows(rf_mod)
   
-  if ("enet.coef" %in% colnames(SS)) {
-    enet.importances <- SS %>%
-      dplyr::distinct(feature, enet.coef, fold) %>%
-      reshape2::acast(feature ~ fold, value.var = "enet.coef")
-    
-    enet.table <- tibble(feature = rownames(enet.importances),
-                         enet.coef.mean = enet.importances %>%
-                           apply(1, function(x) mean(x[x!= 0], na.rm = T)),
-                         enet.coef.sd =   enet.importances %>%
-                           apply(1, function(x) sd(x[x!= 0], na.rm = T)),
-                         enet.coef.stability = enet.importances %>%
-                           apply(1, function(x) mean(x != 0, na.rm = T))) %>%
-      dplyr::filter((enet.coef.stability >= 0.7), feature != "(Intercept)")
-    
-    enet_mod <- enet.table %>%
-      dplyr::mutate(MSE = mean(dplyr::distinct(SS, enet.mse, fold)$enet.mse,
-                               na.rm = T),
-                    MSE.se = sd(dplyr::distinct(SS, enet.mse, fold)$enet.mse,
-                                na.rm = T),
-                    R2 = 1 - MSE/var(y[1:(k*N)], na.rm = T),
-                    PearsonScore = cor(y[1:(k*N)], yhat_enet[1:(k*N)],
-                                       use = "pairwise.complete.obs")) %>%
-      dplyr::distinct(MSE, MSE.se, R2, PearsonScore) %>%
-      dplyr::mutate(type = "ENet")
-  } else {
-    enet.importances <- tibble()
-    enet.table <- tibble()
-    enet_mod <- tibble()
-  }
   
-  
-  model_table %<>% dplyr::bind_rows(enet_mod)
-  
-  
-  return(list(RF.table, enet.table, model_table, yhat_rf, yhat_enet))
+  return(list(rf.fit = RF.table, mod.tab = model_table, preds = yhat_rf))
 }
-
-# function to correlate a vector y with a matrix X using only the top features
-correlate_regressed <- function(X, y, regressors, max_features) {
-  y <- y[is.finite(y)]  # only finite values
-  
-  # shared cell lines (feature matrix and results)
-  overlap <- intersect(rownames(X), names(y))
-  overlap <- intersect(overlap, rownames(regressors))
-  
-  if (length(overlap) <= 10) {
-    return(tibble())
-  }
-  
-  # correlate and filter top n by effect size
-  corr_mat <- cor(X[overlap,], y[overlap], use = "pairwise.complete.obs")
-  top_n <- scale(X[overlap, rank(-abs(corr_mat)) <= 2 * max_features])
-  top_n <- top_n[, apply(top_n, 2, function(x) var(x, na.rm = TRUE)) > 0]
-  y <- scale(y)[,1]
-  R <- regressors[overlap,]
-  
-  corr_table <- tryCatch(expr = {
-    tibble(feature = colnames(top_n),
-           coeff = apply(top_n, 2, function(x) {
-             m = lm(y[overlap] ~ x + R)
-             coef(m)[['x']]
-           }),
-           p.val = apply(top_n, 2, function(x) {
-             m = lm(y[overlap] ~ x + R)
-             l = lmtest::coeftest(m,
-                                  vcov =
-                                    sandwich::vcovHC(m,
-                                                     type = "HC1"))
-             return(l[2, 4])
-           }))
-    
-  }, error = function(e) {
-    print(paste("Unable to correlate: ", e))
-    return(tibble())
-  })
-  
-  if (length(corr_table) < 1) {
-    return(corr_table)
-  }
-  
-  # calculate q values
-  corr_table %<>%
-    dplyr::arrange(desc(abs(coeff))) %>%
-    dplyr::mutate(rank = 1:n()) %>%
-    dplyr::mutate(q.val = p.adjust(c(p.val,rep(1, ncol(X) - ncol(top_n))),
-                                   method = "BH")[1:ncol(top_n)]) %>%
-    dplyr::filter(rank <= max_features)
-  
-  return(corr_table)
-}
-

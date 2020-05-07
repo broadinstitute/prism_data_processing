@@ -76,6 +76,19 @@ calc_ssmd <- function(X) {
 }
 
 #---- Dose-Response Parameters ----
+# fit dose-response curve and return parameters
+fit_drc <- function(df) {
+  # fit with dr4pl
+  fit <- tryCatch(dr4pl(dose = df$pert_dose,
+                        response = 2^df$LFC.cb,
+                        method.init = "logistic",
+                        trend = "decreasing"),
+                  error = function(e) NA)
+  # get parameters
+  param <- tryCatch(summary(a)$coefficients$Estimate, error = function(e) NA)
+  return(param)
+}
+
 # area under curve given dose-response parameters
 compute_auc <- function(l, u, ec50, h, md, MD) {
   f1 = function(x) pmax(pmin((l + (u - l)/(1 + (2^x/ec50)^h)),1), 0 )

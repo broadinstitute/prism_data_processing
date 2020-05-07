@@ -13,31 +13,6 @@ print("Loaded the data")
 assay_length <- 5  # change to length of experiment
 base_day <- 1  # change to day of early time point measurements
 
-# check for duplicates
-dups <- unprocessed %>%
-  dplyr::filter(pert_type == "trt_cp") %>%
-  dplyr::group_by(ccle_name, pert_mfc_id, pert_dose, culture,
-                  prism_replicate, pool_id) %>%
-  dplyr::mutate(count = dplyr::n_distinct(pert_well)) %>%
-  dplyr::filter(count > 1) %>%
-  dplyr::ungroup()
-
-# if there are duplicates append "_2" to pert_mfc_id
-if(nrow(dups) > 0) {
-  dups %<>%
-    dplyr::distinct(ccle_name, rid, pert_mfc_id,pert_dose, culture,
-                    prism_replicate, pool_id) %>%
-    plyr::join(., unprocessed, match = "first")
-
-  unprocessed %<>%
-    dplyr::anti_join(dups)
-
-  dups %<>%
-    dplyr::mutate(pert_mfc_id = paste(pert_mfc_id, 2, sep = "_"))
-  unprocessed %<>%
-    dplyr::bind_rows(dups)
-}
-
 # split into 300 and 500
 PR300 <- unprocessed %>%
   dplyr::filter(culture == "PR300")
@@ -76,7 +51,7 @@ if(nrow(PR300_base) > 0) {
     dplyr::mutate(rLMFI = mean(rLMFI)) %>%
     dplyr::ungroup() %>%
     dplyr::distinct(rid, rLMFI)
-
+  
   PR300_base_normalized <- PR300_base %>%
     dplyr::left_join(PR300_profile) %>%
     normalize(., PR300_barcodes)
@@ -98,7 +73,7 @@ if(nrow(PR500_base) > 0) {
     dplyr::mutate(rLMFI = mean(rLMFI)) %>%
     dplyr::ungroup() %>%
     dplyr::distinct(rid, rLMFI)
-
+  
   PR500_base_normalized <- PR500_base %>%
     dplyr::left_join(PR500_profile) %>%
     normalize(., PR500_barcodes)
@@ -125,7 +100,7 @@ PR300_error <- PR300_normalized %>%
                                             curve = TRUE )$curve[,2])/2)
 
 # join with SSMD table
-SSMD_table_300 <- SSMD_table_300 %>%
+SSMD_table_300 %<>%
   dplyr::left_join(PR300_error)
 
 # REPEAT with 500
@@ -143,7 +118,7 @@ PR500_error <- PR500_normalized %>%
                                             LMFI[pert_type == "trt_poscon"],
                                             curve = TRUE )$curve[,2])/2)
 
-SSMD_table_500 <- SSMD_table_500 %>%
+SSMD_table_500 %<>%
   dplyr::left_join(PR500_error)
 
 # combine 300 and 500 tables
@@ -212,64 +187,64 @@ CONTROL_GR_300 <- tryCatch(expr = {PR300_base_normalized %>%
 })
 # repeat with PR500
 CONTROL_GR_500 <- tryCatch(expr = {PR500_base_normalized %>%
-  dplyr::group_by(ccle_name, rid, pool_id, culture) %>%
-  dplyr::summarize(mLMFI.c = median(LMFI),
-                   n.c = n(),
-                   var.c = (mad(LMFI)^2/n.c) * pi/2) %>%
-  dplyr::select(-n.c) %>%
-  dplyr::inner_join(PR500_normalized %>%
-                      dplyr::filter(pert_type == "ctl_vehicle") %>%
-                      dplyr::group_by(ccle_name, rid, pool_id, culture) %>%
-                      dplyr::summarize(mLMFI.d = median(LMFI),
-                                       n.d = n(),
-                                       var.d = (mad(LMFI)^2/n.d) * pi/2) %>%
-                      dplyr::select(-n.d)) %>%
-  dplyr::ungroup()
+    dplyr::group_by(ccle_name, rid, pool_id, culture) %>%
+    dplyr::summarize(mLMFI.c = median(LMFI),
+                     n.c = n(),
+                     var.c = (mad(LMFI)^2/n.c) * pi/2) %>%
+    dplyr::select(-n.c) %>%
+    dplyr::inner_join(PR500_normalized %>%
+                        dplyr::filter(pert_type == "ctl_vehicle") %>%
+                        dplyr::group_by(ccle_name, rid, pool_id, culture) %>%
+                        dplyr::summarize(mLMFI.d = median(LMFI),
+                                         n.d = n(),
+                                         var.d = (mad(LMFI)^2/n.d) * pi/2) %>%
+                        dplyr::select(-n.d)) %>%
+    dplyr::ungroup()
 }, error = function(e) {
   return(NA)
 })
 # treatment
 GR_300 <- tryCatch(expr = {PR300_normalized %>%
-  dplyr::filter(pool_id != "CTLBC") %>% # no control barcodes
-  # now group by compound
-  dplyr::group_by(pert_mfc_id, pert_type, pert_name, pert_dose, pert_idose, ccle_name, rid, pool_id, culture) %>%
-  dplyr::summarize(mLMFI.t = median(LMFI),
-                   n.t = n(),
-                   var.t = (mad(LMFI)^2/n.t) * pi/2) %>%  # n.t = 3 (replicates)
-  dplyr::select(-n.t) %>%
-  dplyr::inner_join(CONTROL_GR_300) %>%
-  dplyr::ungroup()
+    dplyr::filter(pool_id != "CTLBC") %>% # no control barcodes
+    # now group by compound
+    dplyr::group_by(pert_mfc_id, pert_type, pert_name, pert_dose, pert_idose, ccle_name, rid, pool_id, culture) %>%
+    dplyr::summarize(mLMFI.t = median(LMFI),
+                     n.t = n(),
+                     var.t = (mad(LMFI)^2/n.t) * pi/2) %>%  # n.t = 3 (replicates)
+    dplyr::select(-n.t) %>%
+    dplyr::inner_join(CONTROL_GR_300) %>%
+    dplyr::ungroup()
 }, error = function(e) {
   return(tibble())
 })
 GR_500 <- tryCatch(expr = {PR500_normalized %>%
-  dplyr::filter(pool_id != "CTLBC") %>%
-  dplyr::group_by(pert_mfc_id, pert_type, pert_name, pert_dose, pert_idose, ccle_name, rid, pool_id, culture) %>%
-  dplyr::summarize(mLMFI.t = median(LMFI),
-                   n.t = n(),
-                   var.t = (mad(LMFI)^2/n.t) * pi/2) %>%
-  dplyr::select(-n.t) %>%
-  dplyr::inner_join(CONTROL_GR_500) %>%
-  dplyr::ungroup()
+    dplyr::filter(pool_id != "CTLBC") %>%
+    dplyr::group_by(pert_mfc_id, pert_type, pert_name, pert_dose, pert_idose, ccle_name, rid, pool_id, culture) %>%
+    dplyr::summarize(mLMFI.t = median(LMFI),
+                     n.t = n(),
+                     var.t = (mad(LMFI)^2/n.t) * pi/2) %>%
+    dplyr::select(-n.t) %>%
+    dplyr::inner_join(CONTROL_GR_500) %>%
+    dplyr::ungroup()
 }, error = function(e) {
   return(tibble())
 })
 # combined
 GR_TABLE <- tryCatch(expr = {dplyr::bind_rows(GR_300, GR_500) %>%
-  # calc control change (DMSO - base)/(t - base day),
-  # treatment change (treatment - DMSO)/t - control,
-  # use to calc Z (treatment/control) and GR (2^Z - 1)
-  dplyr::mutate(control_lfc = (mLMFI.d - mLMFI.c)/(assay_length - base_day),
-                treatment_control_lfc = (mLMFI.t - mLMFI.d)/(assay_length),
-                treatment_lfc = treatment_control_lfc + control_lfc,
-                Z = treatment_lfc/control_lfc,
-                var.treatment = (var.t/assay_length^2) + (var.d/(assay_length - base_day)^2) +
-                  (var.c*(1/(assay_length-base_day) - 1/assay_length)^2),
-                var.control = (var.c + var.d)/(assay_length - base_day)^2,
-                GR = (2^Z) - 1) %>%
-  dplyr::distinct(pert_mfc_id, pert_type, pert_name, pert_dose, pert_idose, ccle_name, culture, pool_id,
-                  control_lfc, treatment_lfc, Z, var.treatment, var.control, GR) %>%
-  dplyr::filter(control_lfc > 0)
+    # calc control change (DMSO - base)/(t - base day),
+    # treatment change (treatment - DMSO)/t - control,
+    # use to calc Z (treatment/control) and GR (2^Z - 1)
+    dplyr::mutate(control_lfc = (mLMFI.d - mLMFI.c)/(assay_length - base_day),
+                  treatment_control_lfc = (mLMFI.t - mLMFI.d)/(assay_length),
+                  treatment_lfc = treatment_control_lfc + control_lfc,
+                  Z = treatment_lfc/control_lfc,
+                  var.treatment = (var.t/assay_length^2) + (var.d/(assay_length - base_day)^2) +
+                    (var.c*(1/(assay_length-base_day) - 1/assay_length)^2),
+                  var.control = (var.c + var.d)/(assay_length - base_day)^2,
+                  GR = (2^Z) - 1) %>%
+    dplyr::distinct(pert_mfc_id, pert_type, pert_name, pert_dose, pert_idose, ccle_name, culture, pool_id,
+                    control_lfc, treatment_lfc, Z, var.treatment, var.control, GR) %>%
+    dplyr::filter(control_lfc > 0)
 }, error = function(e) {
   return(tibble())
 })
@@ -290,46 +265,31 @@ for(jx in 1:nrow(DRC_TABLE_cb)) {
   d = DRC_TABLE_cb %>%
     dplyr::filter(ix == jx) %>%
     dplyr::left_join(LFC_TABLE)
-
+  
   # fit curve
-  a = tryCatch(dr4pl(dose = d$pert_dose,
-                     response = 2^d$LFC.cb,
-                     method.init = "logistic",
-                     trend = "decreasing"),
+  a = tryCatch(dr4pl(dose = d$pert_dose, response = 2^d$LFC.cb,
+                     method.init = "logistic", trend = "decreasing"),
                error = function(e) NA)
+  
   # get parameters
   param <- tryCatch(summary(a)$coefficients$Estimate, error = function(e) NA)
   if(!is.na(param)) {
     d %<>%
-      dplyr::mutate(pred = dr4pl::MeanResponse(pert_dose, param))
-    d %<>%
-      dplyr::mutate(e = (2^LFC.cb - pred)^2)  # prediction residuals
-
+      dplyr::mutate(pred = dr4pl::MeanResponse(pert_dose, param),
+                    e = (2^LFC.cb - pred)^2)
     mse <- mean(d$e)
     R2 <- 1 - (sum(d$e)/(nrow(d) * var(d$LFC.cb)))
-
-    x <- tibble(ix = jx,
-                min_dose = min(d$pert_dose),
-                max_dose = max(d$pert_dose),
-                upper_limit = param[1],
-                ec50 = param[2],
-                slope = -param[3],
-                lower_limit = param[4],
-                convergence = a$convergence) %>%
-      dplyr::mutate(auc = compute_auc(lower_limit,
-                                      upper_limit,
-                                      ec50,
-                                      slope,
-                                      min(d$pert_dose),
-                                      max(d$pert_dose)),
-                    log2.ic50 = compute_log_ic50(lower_limit,
-                                                 upper_limit,
-                                                 ec50,
-                                                 slope,
-                                                 min(d$pert_dose),
-                                                 max(d$pert_dose)),
-                    mse = mse,
-                    R2 = R2)
+    auc <- compute_auc(param[4], param[1], param[2], -param[3],
+                       min(d$pert_dose),max(d$pert_dose))
+    log2.ic50 <- compute_log_ic50(param[4], param[1], param[2], -param[3],
+                                  min(d$pert_dose), max(d$pert_dose))
+    
+    x <- tibble(ix = jx, 
+                min_dose = min(d$pert_dose), max_dose = max(d$pert_dose),
+                upper_limit = param[1], lower_limit = param[4],
+                ec50 = param[2], slope = -param[3],
+                convergence = a$convergence,
+                auc = auc, log2.ic50 = log2.ic50, mse = mse, R2 = R2)
     DRC_cb %<>% dplyr::bind_rows(x)
   }
 }
@@ -338,67 +298,6 @@ DRC_TABLE_cb <- DRC_cb %>%
   dplyr::filter(convergence) %>%
   dplyr::left_join(DRC_TABLE_cb) %>%
   dplyr::select(-ix, -convergence, -n)
-
-
-# # GROWTH RATE DOSE-RESPONSE
-# DRC_TABLE_growth <- GR_TABLE %>%
-#   dplyr::distinct(ccle_name, culture, pert_mfc_id, pert_name, pert_dose) %>%
-#   dplyr::count(ccle_name, culture, pert_mfc_id, pert_name) %>%
-#   dplyr::filter(n > 4) %>%
-#   dplyr::mutate(ix = 1:n())
-#
-# DRC_gr <- tibble()
-#
-# for(jx in 1:nrow(DRC_TABLE_growth)) {
-#   d = DRC_TABLE_growth %>%
-#     dplyr::filter(ix == jx) %>%
-#     dplyr::left_join(GR_TABLE)
-#
-#   a = tryCatch(dr4pl(dose = d$pert_dose,
-#                      response = d$GR,
-#                      method.init = "logistic",
-#                      trend = "decreasing"),
-#                error = function(e) NA)
-#   param <- tryCatch(summary(a)$coefficients$Estimate, error = function(e) NA)
-#   if(!is.na(param)) {
-#     d %<>%
-#       dplyr::mutate(pred = dr4pl::MeanResponse(pert_dose, param))
-#     d %<>%
-#       dplyr::mutate(e = (GR - pred)^2)  # prediction residuals
-#
-#     mse <- mean(d$e)
-#     R2 <- 1 - (sum(d$e)/(nrow(d) * var(d$GR)))
-#
-#     x <- tibble(ix = jx,
-#                 min_dose = min(d$pert_dose),
-#                 max_dose = max(d$pert_dose),
-#                 upper_limit = param[1],
-#                 ec50 = param[2],
-#                 slope = -param[3],
-#                 lower_limit = param[4],
-#                 convergence = a$convergence) %>%
-#       dplyr::mutate(aoc = compute_aoc(lower_limit,
-#                                       upper_limit,
-#                                       ec50,
-#                                       slope,
-#                                       min(d$pert_dose),
-#                                       max(d$pert_dose)),
-#                     log2.gr50 = compute_log_gr50(lower_limit,
-#                                                  upper_limit,
-#                                                  ec50,
-#                                                  slope,
-#                                                  min(d$pert_dose),
-#                                                  max(d$pert_dose)),
-#                     mse = mse,
-#                     R2 = R2)
-#     DRC_gr %<>% dplyr::bind_rows(x)
-#   }
-# }
-#
-# DRC_TABLE_growth <- DRC_gr %>%
-#   dplyr::filter(convergence) %>%
-#   dplyr::left_join(DRC_TABLE_growth) %>%
-#   dplyr::select(-ix, -convergence, -n)
 
 #---- Make collapsed LFC table ----
 
@@ -430,22 +329,22 @@ for(i in 1:nrow(compounds)) {
   id <- compounds[[i, "pert_mfc_id"]]  # Broad ID (unique)
   name <- compounds[[i, "pert_name"]]  # name (human readable)
   name <- stringr::str_replace_all(name, "[[:punct:]\\s]+", "-")
-
+  
   # output directory
   path <- paste0(dirname(data_path), "/", name)
   if(!dir.exists(path)) {
     dir.create(path)
   }
-
+  
   lfc <- dplyr::filter(LFC_TABLE, pert_mfc_id == id)
   drc <- dplyr::filter(DRC_TABLE_cb, pert_mfc_id == id)
   lfc_coll <-
     dplyr::filter(LFC_COLLAPSED_TABLE, pert_mfc_id == id)
-
+  
   readr::write_csv(lfc, paste0(path, "/LFC_TABLE.csv"))
   readr::write_csv(lfc_coll, paste0(path, "/LFC_COLLAPSED_TABLE.csv"))
   readr::write_csv(drc, paste0(path, "/DRC_TABLE.csv"))
-
+  
   # GR data if it exists
   if(nrow(GR_TABLE) > 0) {
     gr <- dplyr::filter(GR_TABLE, pert_mfc_id == id)
@@ -461,20 +360,20 @@ for(i in 1:nrow(compounds)) {
   id <- compounds[[i, "pert_mfc_id"]]
   name <- compounds[[i, "pert_name"]]
   name <- stringr::str_replace_all(name, "[[:punct:]\\s]+", "-")
-
+  
   # filter to just see that compound
   compound_DRC <- DRC_TABLE_cb %>%
     dplyr::filter(pert_mfc_id == id) %>%
     dplyr::arrange(desc(auc))
-
+  
   # tracks LFC info
   compound_LFC <- LFC_TABLE %>%
     dplyr::filter(pert_mfc_id == id)
-
+  
   # create .pdf
   pdf(paste0(dirname(data_path), "/", name, "/",
              toupper(name), "_DRCfigures.pdf"))
-
+  
   # loop through each cell line treated by compound and plot DRC
   cell_lines <- compound_DRC$ccle_name %>% unique()
   for(cell_line in cell_lines) {
