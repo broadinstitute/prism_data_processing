@@ -2,7 +2,7 @@
 
 ## Data
 
-### logMFI
+### logMFI and logMFI\_NORMALIZED
 - **pert\_mfc\_id:** the Broad ID for the compound
 - **profile\_id:** a concatenation of replicate and well
 - **rid:** a unique identifier for this cell line
@@ -16,6 +16,7 @@
 - **pert\_name:** the name of the compound
 - **pert\_well:** the plate well the cell line was in
 - **logMFI:** the log2 mean-fluorescent intensity (Luminex readout)
+- **LMFI:** normalized logMFI
 
 ### LFC\_TABLE
 - **pert\_mfc\_id:** the Broad ID for the compound
@@ -81,10 +82,12 @@
 
 ### continuous\_associations
 - **feature:** the feature that was correlated
-- **coeff:** the correlation coefficient between the feature and the response variable
-- **p.val:** the p-value of that correlation
+- **PosteriorMean:** the adaptive shrinkage moderated effect size estimates
+- **PosteriorSD:** the standard deviation of the PosteriorMean
+- **qvalue:** the false-discovery rate of the PosteriorMean
+- **coef:** the correlation coefficient between the feature and the response variable
+- **q.val:** the false-discovery rate of the coef
 - **rank:** the rank of the strength of this correlation
-- **q.val:** the false-discovery rate corrected p-value
 - **pert\_mfc\_id:** the Broad ID for the compound
 - **pert\_name:** the name of the compound
 - **dose:** the response variable (either log-fold change at a particular dose or AUC or IC50)
