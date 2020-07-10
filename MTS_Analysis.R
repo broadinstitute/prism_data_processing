@@ -8,6 +8,15 @@ suppressMessages(source("./src/analysis_functions.R"))
 expression_dir <- # INSERT path to folder with general expression data
 response_dir <- # INSERT path to folder with project specific results
 
+  # base directory
+  script_args <- commandArgs(trailingOnly = TRUE)
+if (length(script_args) != 2) {
+  stop("Please pass directory with data files as argument", call. = FALSE)
+}
+
+expression_dir <- script_args[1]  # folder with general expression data
+response_dir <- script_args[2]  # folder with project specific results
+
 #---- Load data ----
 print("Loading the data")
 GE <- data.table::fread(paste0(expression_dir, "/ge.csv")) %>%  # gene exp.
@@ -26,10 +35,14 @@ XPR <- data.table::fread(paste0(expression_dir, "/xpr.csv")) %>%  # CRISPR KO
   as.matrix(., rownames = "V1")
 LIN <- data.table::fread(paste0(expression_dir, "/lin.csv")) %>%  # lineage
   as.matrix(., rownames = "V1")
-shRNA <- data.table::fread(paste0(expression_dir, "/shrna.csv")) %>%  # shRNA
+shRNA <- data.table::fread(paste0(expression_dir, "/shrna.csv")) %>%  # lineage
   as.matrix(., rownames = "V1")
 repurposing <- data.table::fread(paste0(expression_dir, "/rep.csv")) %>%  # repurposing
   as.matrix(., rownames = "V1")
+repurposing_meta <- data.table::fread(paste0(expression_dir, "/rep_info.csv")) %>%
+  dplyr::mutate(column_name = paste("REP", column_name, sep = "_"),
+                name = stringr::str_replace_all(name, "[[:punct:]\\s]+", "-")) %>%
+  dplyr::select(-dose, -screen_id)
 
 continuous_features <- list(GE, CNA, MET, miRNA, PROT, XPR, shRNA, repurposing)
 continuous_names <- c("GE", "CNA", "MET", "miRNA", "PROT", "XPR", "shRNA", "REP")
@@ -49,9 +62,8 @@ X.ccle <- data.table::fread(paste0(expression_dir, "/x-ccle.csv")) %>%
 
 # DRC table
 DRC <- data.table::fread(paste0(response_dir, "/DRC_TABLE.csv"))
-max_dose <- max(DRC$max_dose)
 DRC %<>%
-  dplyr::distinct(ccle_name, culture, pert_name, pert_mfc_id, auc, log2.ic50) %>%
+  dplyr::distinct(ccle_name, culture, pert_name, pert_mfc_id, auc, log2.ic50, max_dose) %>%
   dplyr::mutate(log2.ic50 = ifelse((is.finite(auc) & is.na(log2.ic50)),
                                    3 * max_dose, log2.ic50),
                 log2.auc = log2(auc)) %>%
@@ -61,8 +73,7 @@ DRC %<>%
 # LFC table
 LFC <- data.table::fread(paste0(response_dir, "/LFC_TABLE.csv")) %>%
   dplyr::distinct(pert_name, ccle_name, culture, pert_idose, pert_mfc_id, LFC.cb) %>%
-  dplyr::rename(response = LFC.cb) %>%
-  dplyr::rename(dose = pert_idose) %>%
+  dplyr::rename(response = LFC.cb, dose = pert_idose) %>%
   dplyr::filter(is.finite(response))
 
 # combined
@@ -97,7 +108,7 @@ for (i in 1:nrow(runs)) {
   
   # select relevant responses and convert to vector
   Y <- Yall %>%
-    dplyr::filter(pert_mfc_id == run$pert_mfc_id, dose == run$dose)
+    dplyr::filter(pert_name == run$pert_name, dose == run$dose)
   y <- Y$response; names(y) <- Y$ccle_name
   
   if (all(is.na(y))) {
@@ -165,34 +176,52 @@ for (i in 1:nrow(runs)) {
     feature_table <- continuous_features[[j]]
     feature_type <- continuous_names[j]
     
+    overlap <- dplyr::intersect(rownames(feature_table), names(y))
+    
+    if (min(y[overlap], na.rm = T) == max(y[overlap], na.rm = T)) next;
+    
     # run correlation
-    corr_table <- lin_associations(feature_table, y, scale.A = T, scale.y = T)
+    corr_table <- lin_associations(feature_table[overlap,], y[overlap])$res.table
     
     corr_table %<>%
-      dplyr::select(feature, betahat, p.val, q.val.BH) %>%
-      dplyr::rename(coeff = betahat, q.val = q.val.BH) %>%
-      dplyr::arrange(desc(abs(coeff))) %>%
+      dplyr::select(ind.var, PosteriorMean, PosteriorSD, qvalue, rho, q.val) %>%
+      dplyr::rename(feature = ind.var, coef = rho) %>%
+      dplyr::arrange(desc(abs(coef))) %>%
       dplyr::mutate(rank = 1:n()) %>%
       dplyr::filter(rank <= 500) %>%
-      dplyr::mutate(pert_mfc_id = run$pert_mfc_id) %>%
-      dplyr::mutate(pert_name = run$pert_name) %>%
-      dplyr::mutate(dose = run$dose) %>%
-      dplyr::mutate(feature_type = feature_type)
+      dplyr::mutate(pert_mfc_id = run$pert_mfc_id,
+                    pert_name = run$pert_name,
+                    dose = run$dose,
+                    feature_type = feature_type)
+    
+    # for repurposing replace metadata
+    if (feature_type == "REP") {
+      corr_table %<>%
+        dplyr::left_join(repurposing_meta, by = c("feature" = "column_name")) %>%
+        dplyr::select(-feature) %>%
+        dplyr::rename(feature = name) %>%
+        dplyr::mutate(feature = paste("REP", feature, sep = "_"))
+    }
     
     continuous %<>% dplyr::bind_rows(corr_table)
   }
   
   # correlations with lineage PCs as confounders
-  ge_tab <- lin_associations(GE, y, LIN_PCs, scale.A = T, scale.y = T) %>%
-    dplyr::select(feature, betahat, p.val, q.val.BH) %>%
-    dplyr::rename(coeff = betahat, q.val = q.val.BH) %>%
-    dplyr::arrange(desc(abs(coeff))) %>%
+  overlap <- dplyr::intersect(rownames(GE), names(y))
+  overlap <- dplyr::intersect(overlap, rownames(LIN_PCs))
+  
+  ge_tab <- lin_associations(GE[overlap,], y[overlap], W=LIN_PCs[overlap,])$res.table
+  
+  ge_tab %<>%
+    dplyr::select(ind.var, PosteriorMean, PosteriorSD, qvalue, rho, q.val) %>%
+    dplyr::rename(feature = ind.var, coef = rho) %>%
+    dplyr::arrange(desc(abs(coef))) %>%
     dplyr::mutate(rank = 1:n()) %>%
     dplyr::filter(rank <= 500) %>%
-    dplyr::mutate(pert_mfc_id = run$pert_mfc_id) %>%
-    dplyr::mutate(pert_name = run$pert_name) %>%
-    dplyr::mutate(dose = run$dose) %>%
-    dplyr::mutate(feature_type = "GE_noLIN")
+    dplyr::mutate(pert_mfc_id = run$pert_mfc_id,
+                  pert_name = run$pert_name,
+                  dose = run$dose,
+                  feature_type = "GE_noLIN")
   
   continuous %<>% dplyr::bind_rows(ge_tab)
   
@@ -219,12 +248,11 @@ for (i in 1:nrow(runs)) {
           dplyr::filter(rank <= 100) %>%
           dplyr::select(-rank)
       }
-      
       discrete %<>% dplyr::bind_rows(t_table)
     }
   }
   
-  print(paste0(i, " of ", nrow(runs), " complete"))
+  print(paste(i, "of", nrow(runs), "complete"))
 }
 
 # write results to project folder

@@ -12,79 +12,73 @@ library(limma)
 library(corpcor)
 library(ashr)
 library(gmodels)
+library(WGCNA)
 
 #---- Continuous ----
 # correlation function
-lin_associations = function(A, y, W = NULL, robust.se = F, 
-                            scale.A = T, scale.y = F, is.dependent = T,
-                            var.th = 0, coef.var = F){
+lin_associations <- function (X, Y, W=NULL, n.min=11, shrinkage=T, alpha=0) {
+  # load necessary packages
   
-  mean.na = function(x) mean(x, na.rm = T)
+  # NA handling
+  X.NA <- !is.finite(X); Y.NA <- !is.finite(Y)
+  N <- (t(!X.NA) %*% (!Y.NA)) - 2
   
-  overlap <- intersect(rownames(A), names(y))
-  if(!is.null(W)) {
-    overlap <- intersect(rownames(W), overlap)
-    W <- W[overlap,]
+  # if there are provided confounders, calculate P matrix and use to control
+  if (!is.null(W)) {
+    P <- W %*% corpcor::pseudoinverse(t(W) %*% W) %*% t(W)
+    X[X.NA] <- 0; X <- X - (P %*% X); X[X.NA] <- NA
+    Y[Y.NA] <- 0; Y <- Y - (P %*% Y); Y[Y.NA] <- NA
+    N <- N - dim(W)[2]
   }
-  y <- y[overlap]; A <- A[overlap,]
   
-  N = length(y);
-  y_ = scale(y, center = T, scale = scale.y)
-  if (coef.var) {
-    A_ = A[, apply(A,2,function(x) var(x,na.rm = T)/mean(x,na.rm = T)^2) > var.th]
-    A_ = scale(A_, center = T, scale = scale.A)
-  } else {
-    A_ = A[, apply(A,2,function(x) var(x,na.rm = T)) > var.th]
-    A_ = scale(A_, center = T, scale = scale.A)
-  }
-  N.A = apply(A_, 2, function(x) sum(is.finite(x)))
+  # scale matrices
+  X <- scale(X); sx <- attributes(X)$`scaled:scale`
+  Y <- scale(Y); sy <- attributes(Y)$`scaled:scale`
   
+  # calculate correlations
+  rho <- WGCNA::cor(X, Y, use = "pairwise.complete.obs")
   
-  if(is.null(W)) {
-    W_ = matrix(rep(1,N))
-  } else {
-    W_ = cbind(W, rep(1,N))}
+  # correct correlation estimates
+  beta <- t(t(rho / sx) * sy)
+  beta.se <- t(t(sqrt(1 - rho ^ 2) / sx) * sy) / sqrt(N)
   
+  # generate p and q values (without adaptive shrinkage)
+  p.val <- 2 * pt(-abs(beta / beta.se), N)
+  p.val[N < n.min] <- NA
+  p.val[(sx == 0) | !is.finite(sx), ] <- NA
+  p.val[, (sy == 0) | !is.finite(sy)]  <- NA
+  q.val = apply(p.val, 2, function(x) p.adjust(x, method = "BH"))
   
-  P = diag(rep(1,N)) -  W_ %*% corpcor::pseudoinverse(t(W_) %*% W_) %*% t(W_)
-  y_ = c(P %*% y_)
-  
-  A.NA = !is.finite(A_)
-  A_ = A_; A_[A.NA] = 0
-  A_ = P %*% A_; A_[A.NA] = NA
-  
-  
-  if(is.dependent){
-    K = apply(A_^2, 2, mean.na) 
-    beta.hat =  apply(A_ * y_, 2, mean.na) / K; 
-    eps.hat = y_ - t(t(A_)* beta.hat)
-  } else {
-    K = apply((A_ < Inf) * y_^2, 2, mean.na)
-    beta.hat =  apply(A_ * y_, 2,  mean.na) / K; 
-    eps.hat = A_ - as.matrix(y_) %*% t(beta.hat)}
-  
-  if(!robust.se){
-    res = tibble::tibble(feature = colnames(A_),
-                         beta.hat = beta.hat,
-                         beta.se = sqrt(apply(eps.hat^2, 2, mean.na) / K / (N.A - 1 - dim(W_)[2])),
-                         p.val = 2*pnorm(-abs(beta.hat / beta.se)),
-                         q.val.BH = p.adjust(p.val, method = "BH"), 
-                         n = N.A)
+  # if shrinkage wanted, generate res.table with adaptive shrinkage results
+  if(shrinkage){
+    res.table <- list()
+    for (ix in 1:dim(Y)[2]) {
+      fin <- is.finite(p.val[, ix])
+      res <- tryCatch(ashr::ash(beta[fin, ix], beta.se[fin, ix],
+                                mixcompdist = "halfuniform", alpha = alpha)$result,
+                      error = function(e) NULL
+      )
+      if (!is.null(res)) {
+        res$dep.var <- colnames(Y)[ix]
+        res$ind.var <- rownames(res)
+        res <- cbind(res, rho=rho[rownames(res),], q.val=q.val[rownames(res),])
+        res.table[[ix]] <- res
+      }
+    }
+    res.table <- dplyr::bind_rows(res.table)
   } else{
-    res = tibble::tibble(feature = colnames(A_),
-                         beta.hat = beta.hat,
-                         beta.se = sqrt(apply(A_^2 * eps.hat^2, 2, mean.na) / (N.A - 1 - dim(W_)[2]))/K , 
-                         p.val = 2*pnorm(-abs(beta.hat / beta.se)),
-                         q.val.BH = p.adjust(p.val, method = "BH"),
-                         n = N.A)}
+    res.table <- NULL
+  }
   
-  res$beta.se[res$beta.se < .000001] <- .000001 # deals with bug in ash
-  res = dplyr::bind_cols(res[,c(1,4,5,6)], 
-                         ashr::ash(res$beta.hat, res$beta.se)$result[,c(1,2,7,8,9,10)])
-  
-  res %<>%dplyr::mutate(z.score = PosteriorMean/PosteriorSD)
-  
-  return(res)
+  return(list(
+    N = N,
+    rho = rho,
+    beta = beta,
+    beta.se = beta.se,
+    p.val = p.val,
+    q.val = q.val,
+    res.table = res.table
+  ))
 }
 
 #---- Discrete variables biomarkers ----
@@ -189,7 +183,7 @@ discrete_test <- function(X, y) {
 random_forest <- function(X, y, k = 10, n = 500){
   y <- y[is.finite(y)]  # only finite values
   cl <- sample(intersect(rownames(X), names(y)))  # overlapping rows
-  X <- scale(X[cl,]); y = y[cl]; N = floor(length(cl)/k)
+  y = y[cl]; N = floor(length(cl)/k)
   
   colnames(X) %<>% make.names()
   yhat_rf <- y; yhat_enet <- y
@@ -203,11 +197,11 @@ random_forest <- function(X, y, k = 10, n = 500){
     X_train <- X[train,]
     
     # assumes no NAs in X
-    X_train <- X_train[,apply(X_train,2,var) > 0]
+    X_train <- X_train[,apply(X_train, 2, var) > 0]
     X_test <- X[test,]
     
     # select top n correlated features in X
-    X_train <- X_train[,rank(-abs(cor(X_train,y[train])))<= n]
+    X_train <- X_train[,rank(-abs(cor(X_train, y[train])))<= n]
     
     # makes RF and ENet models
     rf <- ranger::ranger(y ~ .,
