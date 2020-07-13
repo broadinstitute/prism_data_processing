@@ -2,9 +2,9 @@
 
 This document outlines the steps executed by `MTS_Data_Processing.R`, an R script to process Level 2 MTS data. That script can be used to regenerate any data obtained from PRISM based on logMFI values. This information is also available in the "Data Processing" section of the report.
 
-- **Input** is logMFI values associated with 3 replicates of cell line treatments with drugs and controls.
-- **Output** is files describing dose-response of each cell line to each drug, mean-fold change of cell lines in response to drugs, and statistical significance metrics.
-- **To execute:** change `data_path` variable to match local path of unprocessed data.
+- **Input** is mean-fluorescence intensity of cell lines treated with small molecules and controls.
+- **Output** is files describing dose-response behavior of each cell line to each drug, median-fold change of cell lines in response to small molecules, and statistical significance metrics.
+- **To execute:** change `data_path` variable in `MTS_Data_Processing.R` to match local path of unprocessed data (if data is in .gctx form, use `make_logMFI.R` first).
 
 The "resulting data" section of each step is meant to guide the user through the code and does not necessarily reflect output or files generated (only internal R variables).
 
@@ -61,4 +61,4 @@ The "resulting data" section of each step is meant to guide the user through the
 
 ---
 
-To run biomarker analyses, use `MTS_Analysis.R`, passing a folder with the data output from this pipeline.
+To run biomarker analyses, use `MTS_Analysis.R`, passing a folder with the data output from this pipeline. Output and tests done in the biomarker analysis portion are described in `analysis_info.md`
