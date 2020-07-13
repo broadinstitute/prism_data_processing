@@ -26,8 +26,8 @@ Shown above is the correlations between **Nutlin-3** area under the curve (AUC) 
 
 ## Multivariate models
 
-Our multivariate models use a combination of omics datasets to generate predictions about compound sensitivity. In particular we use a cross-validated random forest model to predict sensitivity based on -omics features. We then comparethe predictions of our model with actual results to determine model accuracy (reported as $R^2$ and Pearson Score). We can also extract the estimated importance of each feature of the model in generated the predictions in order to pick out potential biomarkers. Features that are important in well-performing models are said to be of interest.
+Our multivariate models use a combination of -omics datasets to generate predictions about compound sensitivity. In particular we use a cross-validated random forest model to predict sensitivity based on -omics features. We then compare the predictions of our model with actual results to determine model accuracy (reported as $R^2$ and Pearson Score). We can also extract the estimated importance of each feature of the model in generated the predictions in order to pick out potential biomarkers. Features that are important in well-performing models are said to be of interest.
 
 ![Random Forest example](./images/biomarkers.png)
 
-Shown abovea are the importances of the top 250 features in models predicting imatinib and AZ-628 sensitivity. In both cases, targets of the compounds show up as the most important.
+Shown abovea are the importances of the top 250 features in models predicting imatinib and AZ-628 sensitivity. In both cases, targets of the compounds show up as the most important. It is important to not that feature importance is a directionless measure, so other analyses must be compared to determine whether a feature is associated with increased or decreased sensitivity.
