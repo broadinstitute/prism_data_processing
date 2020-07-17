@@ -15,5 +15,4 @@ install.packages(c("tidyverse",
                  )
 
 BiocManager::install()
-BiocManager::install(c("limma",
-                       "sva"))
+BiocManager::install(c("limma", "sva"))

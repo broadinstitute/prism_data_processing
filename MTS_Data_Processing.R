@@ -207,7 +207,8 @@ CONTROL_GR_500 <- tryCatch(expr = {PR500_base_normalized %>%
 GR_300 <- tryCatch(expr = {PR300_normalized %>%
     dplyr::filter(pool_id != "CTLBC") %>% # no control barcodes
     # now group by compound
-    dplyr::group_by(pert_mfc_id, pert_type, pert_name, pert_dose, pert_idose, ccle_name, rid, pool_id, culture) %>%
+    dplyr::group_by(pert_mfc_id, pert_type, pert_name, pert_dose, pert_idose,
+                    ccle_name, rid, pool_id, culture) %>%
     dplyr::summarize(mLMFI.t = median(LMFI),
                      n.t = n(),
                      var.t = (mad(LMFI)^2/n.t) * pi/2) %>%  # n.t = 3 (replicates)
@@ -219,7 +220,8 @@ GR_300 <- tryCatch(expr = {PR300_normalized %>%
 })
 GR_500 <- tryCatch(expr = {PR500_normalized %>%
     dplyr::filter(pool_id != "CTLBC") %>%
-    dplyr::group_by(pert_mfc_id, pert_type, pert_name, pert_dose, pert_idose, ccle_name, rid, pool_id, culture) %>%
+    dplyr::group_by(pert_mfc_id, pert_type, pert_name, pert_dose, pert_idose,
+                    ccle_name, rid, pool_id, culture) %>%
     dplyr::summarize(mLMFI.t = median(LMFI),
                      n.t = n(),
                      var.t = (mad(LMFI)^2/n.t) * pi/2) %>%
