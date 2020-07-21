@@ -3,8 +3,6 @@ documentclass: scrartcl
 pagestyle: empty
 colorlinks: true
 link-citations: true
-output:
-
 ---
 
 # PRISM Biomarker Analysis Overview
