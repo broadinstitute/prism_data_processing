@@ -1,6 +1,6 @@
 <p align="center">
-  <img src="misc/BroadInstLogoforDigitalRGB.png" width="300" hspace="40"/>
-  <img src="misc/prism_logo_tagline_side.png" width="400" />
+  <img src="img/BroadInstLogoforDigitalRGB.png" width="300" hspace="40"/>
+  <img src="img/prism_logo_tagline_side.png" width="400" />
 </p>
 
 # Prism Data Processing
