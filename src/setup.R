@@ -8,11 +8,13 @@ install.packages(c("tidyverse",
                    "dr4pl",
                    "readr",
                    "ranger",
-                   "glmnet",
                    "sandwich",
                    "BiocManager",
+                   "ashr",
+                   "corpcor",
+                   "lmtest",
                    "PRROC")
                  )
 
 BiocManager::install()
-BiocManager::install(c("limma", "sva"))
+BiocManager::install(c("limma", "sva", "WGCNA"))

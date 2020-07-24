@@ -7,7 +7,7 @@
 
 Public version of the data processing pipeline for [PRISM](https://www.theprismlab.org/) medium throughput screens (MTS). For use by collaborators to regenerate tables and plots correlating drug response to cell line features. Public cell line data for equivalent analysis is available on the [DepMap Portal](https://depmap.org/portal/).
 
-For only biomarker analysis see the `cdsr_biomarker` [package](https://github.com/broadinstitute/cdsr_biomarker).
+For more general biomarker analysis see the `cdsr_biomarker` [package](https://github.com/broadinstitute/cdsr_biomarker) which is based on models in the `cdsr_models` [package](https://github.com/broadinstitute/cdsr_models).
 
 This repository contains 3 primary scripts:
 
