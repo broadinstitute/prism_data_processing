@@ -54,28 +54,26 @@ rownames(PR300) = paste0(rownames(PR300), "_", "PR300")
 # read in cell info
 cell_info_500 <- data.table::fread(path_cell_info_500) %>%
   dplyr::distinct(rid, ccle_name, pool_id) %>%
-  dplyr::mutate(culture = "PR500") %>%
-  dplyr::mutate(rid = paste0(rid, "_", culture)) %>%
-  dplyr::mutate(pool_id = ifelse(pool_id == "", "CTLBC", pool_id))
+  dplyr::mutate(culture = assay) %>%
+  dplyr::mutate(rid = paste0(rid, "_", assay)) %>%
+  dplyr::mutate(pool_id = ifelse(pool_id == "" | pool_id == -666,
+                               "CTLBC", pool_id))
 
 cell_info_300 <- data.table::fread(path_cell_info_300) %>%
   dplyr::distinct(rid, ccle_name, pool_id) %>%
-  dplyr::mutate(culture = "PR300") %>%
-  dplyr::mutate(rid = paste0(rid, "_", culture)) %>%
-  dplyr::mutate(pool_id = ifelse(pool_id == "", "CTLBC", pool_id))
+  dplyr::mutate(culture = assay) %>%
+  dplyr::mutate(rid = paste0(rid, "_", assay)) %>%
+  dplyr::mutate(pool_id = ifelse(pool_id == "" | pool_id == -666,
+                               "CTLBC", pool_id))
 
 # read in inst info
 inst_info_500 <- data.table::fread(path_inst_info_500) %>%
-  dplyr::filter(!is_well_failure) %>%
-  dplyr::distinct(profile_id, pert_dose, pert_idose, pert_iname, pert_mfc_id,
-                  pert_type, pert_well, prism_replicate) %>%
-  dplyr::mutate(compound_plate =  word(prism_replicate, 1,2, sep = fixed("_")))
+  dplyr::filter(!str_detect(pert_plate, "BASE"), !is_well_failure) %>%
+  make_long_map(.)
 
 inst_info_300 <- data.table::fread(path_inst_info_300) %>%
-  dplyr::filter(!is_well_failure) %>%
-  dplyr::distinct(profile_id, pert_dose, pert_idose, pert_iname, pert_mfc_id,
-                  pert_type, pert_well, prism_replicate) %>%
-  dplyr::mutate(compound_plate =  word(prism_replicate, 1,2, sep = fixed("_")))
+  dplyr::filter(!str_detect(pert_plate, "BASE"), !is_well_failure) %>%
+  make_long_map(.)
 
 # ensure unique profile IDs
 PR500 <- PR500[, inst_info_500$profile_id %>% unique()]

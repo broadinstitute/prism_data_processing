@@ -39,6 +39,55 @@ read_hdf5 <- function(filename, index = NULL) {
   return(data_matrix)
 }
 
+# convert a wide platemap to log form
+make_long_map <- function(df) {
+  pert1 <- df %>%
+    dplyr::select(!contains("2"))
+  pert2 <- df %>%
+    dplyr::select(contains("2"), pert_plate, pert_well, pert_time,
+                  prism_replicate, is_well_failure, profile_id)
+
+  colnames(pert2) <- sapply(colnames(pert2), FUN = function(x) rename_col(x))
+
+  if (ncol(pert2) > 6) {
+    new_map <- dplyr::bind_rows(pert1, pert2)
+  } else {
+    pert1  %<>%
+      dplyr::filter(pert_iname != "Untrt") %>%
+      dplyr::mutate(pert_type = ifelse(pert_iname %in% c("PBS", "DMSO"), "ctl_vehicle", pert_type)) %>%
+      dplyr::rename(pert_name = pert_iname)
+
+    if (!("pert_mfc_id") %in% colnames(pert1)){
+      pert1 %<>% dplyr::mutate(pert_mfc_id = pert_id)
+    }
+
+    return(pert1)
+  }
+
+  new_map %<>%
+    dplyr::filter(pert_iname != "Untrt") %>%
+    dplyr::select(intersect(colnames(.), colnames(pert2))) %>%
+    dplyr::mutate(pert_type = ifelse(pert_iname %in% c("PBS", "DMSO"), "ctl_vehicle", pert_type))
+
+  overview <- new_map %>%
+    dplyr::group_by(pert_well, pert_plate, prism_replicate, profile_id) %>%
+    dplyr::summarize(pert_types = paste(unique(pert_type), collapse = fixed("+")),
+                     pert_names = paste(unique(pert_iname), collapse = fixed("+")),
+                     n = n()) %>%
+    dplyr::ungroup() %>%
+    dplyr::right_join(new_map) %>%
+    dplyr::filter(!(pert_type == "ctl_vehicle" & str_detect(pert_types, "trt")))  %>%
+    dplyr::mutate(pert_iname = ifelse(pert_types == "ctl_vehicle", pert_names, pert_iname),
+                  pert_vehicle = ifelse(pert_types == "ctl_vehicle", pert_names, pert_vehicle),
+                  pert_id = ifelse(pert_types == "ctl_vehicle", pert_names, pert_id),
+                  pert_mfc_id = ifelse(pert_types == "ctl_vehicle", pert_names, pert_mfc_id)) %>%
+    dplyr::select(-pert_types, -pert_names, -n) %>%
+    dplyr::distinct() %>%
+    dplyr::rename(pert_name = pert_iname)
+
+  return(overview)
+}
+
 #---- Normalization ----
 # calculate control barcode medians
 control_medians <- function(X) {
@@ -50,7 +99,7 @@ control_medians <- function(X) {
     dplyr::mutate(mmLMFI = logMFI - mLMFI + median(mLMFI)) %>%  # normalized value for rep
     dplyr::summarize(rLMFI = median(mmLMFI)) %>%  # median normalized value across reps
     dplyr::left_join(X)
-  
+
   return(ref)
 }
 
@@ -65,7 +114,7 @@ normalize <- function(X, barcodes) {
                     predict(newdata = tibble(x = logMFI))) %>%
     dplyr::ungroup() %>%
     dplyr::select(-logMFI)
-  
+
   return(normalized)
 }
 
@@ -98,7 +147,7 @@ calc_ssmd <- function(X) {
     dplyr::mutate(ssmd = (ctl_vehicle_md - trt_poscon_md) /
                     sqrt(ctl_vehicle_mad^2 +trt_poscon_mad^2),
                   nnmd = (ctl_vehicle_md - trt_poscon_md) / ctl_vehicle_mad)
-  
+
   return(SSMD_table)
 }
 
@@ -142,20 +191,20 @@ compute_log_gr50 <- function(l, u, ec50, h, md, MD) {
 #---- Batch Correction ----
 # corrects for pool effects using ComBat
 apply_combat <- function(Y) {
-  
+
   # create "condition" column to be used as "batches"
   df <- Y %>%
     dplyr::distinct(ccle_name, prism_replicate, LFC, culture, pool_id, pert_well) %>%
     tidyr::unite(cond, culture, pool_id, prism_replicate, sep = "::") %>%
     dplyr::filter(is.finite(LFC))
-  
+
   # calculate means and sd's of each condition
   batch <- df$cond
   m <- rbind(df$LFC,
              rnorm(length(df$LFC),
                    mean =  mean(df$LFC, na.rm = TRUE),
                    sd = sd(df$LFC, na.rm = TRUE)))
-  
+
   # use ComBat to align means and sd's of conditions
   combat <- sva::ComBat(dat = m, batch = batch) %>%
     t() %>%
@@ -166,10 +215,10 @@ apply_combat <- function(Y) {
                   pool_id = stringr::word(cond, 2, sep = stringr::fixed("::")),
                   prism_replicate = stringr::word(cond, 3, sep = stringr::fixed("::"))) %>%
     dplyr::select(-cond, -V2)
-  
+
   combat_corrected <- Y %>%
     dplyr::left_join(combat) %>%
     .$LFC.cb
-  
+
   return(combat_corrected)
 }
