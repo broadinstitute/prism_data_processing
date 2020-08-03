@@ -17,8 +17,8 @@ This repository contains 3 primary scripts:
 
 **FIRST** run `setup.R` either in RStudio or terminal to install  packages required for analysis. For shell execute:
 ```bash
-$ cd ./prism_data_processing
-$ Rscript src/setup.R
+cd ./prism_data_processing
+Rscript src/setup.R
 ```
 
 For more information and FAQs see the [info](./info) folder.

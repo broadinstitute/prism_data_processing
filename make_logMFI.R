@@ -9,29 +9,8 @@ library(dr4pl)
 library(magrittr)
 library(hdf5r)
 
-# HDF5 file reader
-read_hdf5 = function (filename, index = NULL) {
-  fun_call <- match.call()
-  hdf5_obj <- hdf5r::H5File$new(filename, mode = "r+")
-  hdf5_attributes <- hdf5r::h5attributes(hdf5_obj)
-  matrix_dims <- hdf5_obj[["0/DATA/0/matrix"]][["dims"]]
-  if (is.null(index)) {
-    index <- list(1:matrix_dims[1], 1:matrix_dims[2])
-  }
-  data_matrix <- hdf5_obj[["0/DATA/0/matrix"]][index[[1]],
-                                               index[[2]]]
-  if (is.null(dim(data_matrix))) {
-    data_matrix %<>% matrix(nrow = length(index[[1]]),
-                            ncol = length(index[[2]]))
-  }
-  data_matrix %<>%
-    magrittr::set_rownames(hdf5_obj[["0/META/ROW/id"]][index[[1]]] %>%
-                             gsub(" *$", "", .)) %>%
-    magrittr::set_colnames(hdf5_obj[["0/META/COL/id"]][index[[2]]] %>%
-                             gsub(" *$", "", .))
-  hdf5_obj$close_all()
-  return(data_matrix)
-}
+# some helper functions
+suppressMessages(source("./src/MTS_functions.R"))
 
 #---- Load the data ----
 
@@ -135,7 +114,7 @@ if(nrow(skipped > 0)) {
                     c("plate", "ignore", "ignore2", "rep", "ignore3"), "_",
                     remove = FALSE) %>%
     dplyr::select(-ignore, -ignore2, -ignore3)
-  
+
   master_logMFI$rep <- substr(master_logMFI$rep, 1, 2)
   master_logMFI %<>%
     dplyr::anti_join(skipped) %>%

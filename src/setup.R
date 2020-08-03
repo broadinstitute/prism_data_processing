@@ -13,8 +13,7 @@ install.packages(c("tidyverse",
                    "ashr",
                    "corpcor",
                    "lmtest",
-                   "PRROC")
-                 )
+                   "PRROC"))
 
 BiocManager::install()
 BiocManager::install(c("limma", "sva", "WGCNA"))
