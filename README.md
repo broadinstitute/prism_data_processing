@@ -39,7 +39,7 @@ Converts raw .gctx and .txt files downloaded from clue.io to readable logMFI.csv
 
 Does pre-processing based on raw median fluorescent intensity (MFI) values and generates tables with data on QC, viabilities, and dose-response parameters, as well as figures showing dose response curves.
 
-Steps of pre-processing outlined in [`MTS_pipeline.md`](.info/MTS_pipeline.md).
+Steps of pre-processing outlined in [`MTS_pipeline.md`](info/MTS_pipeline.md).
 
 
 ### `MTS_Analysis.R`
