@@ -15,6 +15,7 @@
 - **pert\_idose:** a string version of pert_dose
 - **pert\_name:** the name of the compound
 - **pert\_well:** the plate well the cell line was in
+- **pert\_time:** the length of the assay (in hours)
 - **logMFI:** the log2 mean-fluorescent intensity (Luminex readout)
 - **LMFI:** normalized logMFI
 
@@ -29,6 +30,7 @@
 - **ccle\_name:** the name of the cell line
 - **pert\_dose:** the numeric dose of this condition (µM)
 - **pert\_well:** the plate well the cell line was in
+- **pert\_time:** the length of the assay (in hours)
 - **pool\_id:** the PRISM pool the cell line is in
 - **profile\_id:** a concatenation of replicate and well
 - **pert\_idose:** a string version of pert_dose
@@ -43,6 +45,7 @@
 - **pert\_dose:** the numeric dose of this condition (µM)
 - **pert\_idose:** a string version of pert_dose
 - **compound\_plate:** the plate of the sample
+- **pert\_time:** the length of the assay (in hours)
 - **LFC:** the log-fold change of this condition versus DMSO
 - **LFC.cb:** the COMBAT corrected log-fold change (this is used for the dose-response curves, see the report for more information)
 
@@ -59,6 +62,7 @@
 - **culture:** the PRISM cell set the cell line is in
 - **pert\_mfc\_id:** the Broad ID for the compound
 - **pert\_name:** the name of the compound
+- **pert\_time:** the length of the assay (in hours)
 
 
 ## Results
@@ -77,6 +81,7 @@
 - **rid:** a unique identifier for this cell line
 - **error\_rate:** the error rate of a perfect threshold classifier distinguishing positive and negative controls
 - **pass:** whether this cell line passed QC or not
+- **pert\_time:** the length of the assay (in hours)
 - **compound\_plate:** the plate of the sample
 - **n.rep:** number of passing replicates for this cell line
 
@@ -92,6 +97,7 @@
 - **pert\_name:** the name of the compound
 - **dose:** the response variable (either log-fold change at a particular dose or AUC or IC50)
 - **feature\_type:** the type of feature
+- **pert\_time:** the length of the assay (in hours)
 
 ### discrete\_associations
 - **feature:** the feature that was correlated
@@ -103,6 +109,7 @@
 - **pert\_name:** the name of the compound
 - **dose:** the response variable (either log-fold change at a particular dose or AUC or IC50)
 - **feature\_type:** the type of feature
+- **pert\_time:** the length of the assay (in hours)
 
 ### Model\_table
 - **MSE:** the mean-squared error of the model
@@ -114,6 +121,7 @@
 - **pert\_name:** the name of the compound
 - **pert\_idose:** the response variable (either log-fold change at a particular dose or AUC or IC50)
 - **model:** the dataset used for the model
+- **pert\_time:** the length of the assay (in hours)
 
 ### RF\_table
 - **feature:** the omic feature being considered
@@ -125,3 +133,4 @@
 - **pert\_idose:** the response variable (either log-fold change at a particular dose or AUC or IC50)
 rank
 - **model:** the dataset used for the model
+- **pert\_time:** the length of the assay (in hours)
