@@ -15,7 +15,7 @@ library(dplyr)
 library(hdf5r)
 
 #---- Reading ----
-# HDF5 file reader
+# HDF5 file reader (for .gctx files)
 read_hdf5 <- function(filename, index = NULL) {
   fun_call <- match.call()
   hdf5_obj <- hdf5r::H5File$new(filename, mode = "r+")
@@ -39,19 +39,32 @@ read_hdf5 <- function(filename, index = NULL) {
   return(data_matrix)
 }
 
-# convert a wide platemap to log form
+# function to rename columns (get rid of 2, for make_long_map)
+rename_col <- function(x) {
+  if (str_detect(x, "2")) {
+    return(paste(word(x, 1, sep = "_"), word(x, 3, -1, sep = "_"),  sep = "_"))
+  } else {
+    return(x)
+  }
+}
+
+# convert a wide(ish) platemap to log form
 make_long_map <- function(df) {
+  # read in info about pert1 and pert2
   pert1 <- df %>%
     dplyr::select(!contains("2"))
   pert2 <- df %>%
     dplyr::select(contains("2"), pert_plate, pert_well, pert_time,
                   prism_replicate, is_well_failure, profile_id)
 
+  # rename pert2 columns to match pert1
   colnames(pert2) <- sapply(colnames(pert2), FUN = function(x) rename_col(x))
 
+  # if we have complete pert2 info bind with pert1
   if (ncol(pert2) > 6) {
     new_map <- dplyr::bind_rows(pert1, pert2)
   } else {
+    # otherwise assume there is no pert2
     pert1  %<>%
       dplyr::filter(pert_iname != "Untrt") %>%
       dplyr::mutate(pert_type = ifelse(pert_iname %in% c("PBS", "DMSO"), "ctl_vehicle", pert_type)) %>%
@@ -64,11 +77,13 @@ make_long_map <- function(df) {
     return(pert1)
   }
 
+  # if there is a pert2 ignore untrt wells
   new_map %<>%
-    dplyr::filter(pert_iname != "Untrt") %>%
+    dplyr::filter(!(pert_iname %in% c("Untrt", ""))) %>%
     dplyr::select(intersect(colnames(.), colnames(pert2))) %>%
     dplyr::mutate(pert_type = ifelse(pert_iname %in% c("PBS", "DMSO"), "ctl_vehicle", pert_type))
 
+  # collapse pert types for each well to make sure they match and filter redundant
   overview <- new_map %>%
     dplyr::group_by(pert_well, pert_plate, prism_replicate, profile_id) %>%
     dplyr::summarize(pert_types = paste(unique(pert_type), collapse = fixed("+")),
@@ -107,11 +122,28 @@ control_medians <- function(X) {
 normalize <- function(X, barcodes) {
   normalized <- X %>%
     dplyr::group_by(prism_replicate, pert_well) %>%
-    dplyr::mutate(LMFI = scam(y ~ s(x, bs = "micv", k = 5),
-                              data = tibble(
-                                y = rLMFI[rid %in% barcodes$rid],
-                                x = logMFI[rid %in% barcodes$rid])) %>%
-                    predict(newdata = tibble(x = logMFI))) %>%
+    # try with k=4 and 5 (to avoid hanging), try again with unspecified k
+    dplyr::mutate(LMFI = tryCatch(
+      expr = {tryCatch(
+        expr = {scam(y ~ s(x, bs = "micv", k = 4),
+                     data = tibble(
+                       y = rLMFI[rid %in% barcodes$rid],
+                       x = logMFI[rid %in% barcodes$rid])) %>%
+            predict(newdata = tibble(x = logMFI))},
+        error = function(e) {
+          scam(y ~ s(x, bs = "micv", k = 5),
+               data = tibble(
+                 y = rLMFI[rid %in% barcodes$rid],
+                 x = logMFI[rid %in% barcodes$rid])) %>%
+            predict(newdata = tibble(x = logMFI))
+        })},
+      error = function(e) {
+        scam(y ~ s(x, bs = "micv"),
+             data = tibble(
+               y = rLMFI[rid %in% barcodes$rid],
+               x = logMFI[rid %in% barcodes$rid])) %>%
+          predict(newdata = tibble(x = logMFI))
+      })) %>%
     dplyr::ungroup() %>%
     dplyr::select(-logMFI)
 
@@ -161,16 +193,18 @@ compute_auc <- function(l, u, ec50, h, md, MD) {
 
 # log IC50 from given dose-response parameters
 compute_log_ic50 <- function(l, u, ec50, h, md, MD) {
+  # if 50% viability not reached return NA
   if((l >= 0.5) | (u <= 0.5)) {
     return(NA)
   } else {
+    # otherwise find point in function = 0.5
     f1 = function(x) (l + (u - l)/(1 + (2^x/ec50)^h) - 0.5)
     return(tryCatch(uniroot(f1, c(log2(md), log2(MD)))$root,
                     error = function(x) NA))
   }
 }
 
-# area over curve given dose-response parameters
+# area over curve given dose-response parameters (for GR metrics)
 compute_aoc <- function(l, u, ec50, h, md, MD) {
   f1 = function(x) 1 - pmax(pmin((l + (u - l)/(1 + (2^x/ec50)^h)), 1), -1)
   return(tryCatch(integrate(f1, log2(md),log2(MD))$value/(log2(MD/md)),

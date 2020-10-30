@@ -9,6 +9,8 @@ Public version of the data processing pipeline for [PRISM](https://www.theprisml
 
 For more general biomarker analysis see the `cdsr_biomarker` [package](https://github.com/broadinstitute/cdsr_biomarker) which is based on models in the `cdsr_models` [package](https://github.com/broadinstitute/cdsr_models).
 
+**This version is updated to reflect changes in processing that happened between MTS013 and MTS014. These are largely coding practices related and will not drastically affect results but if you are re-analyzing data from before MTS014 see the branch `pre-mts14`.**
+
 This repository contains 3 primary scripts:
 
 1. `make_logMFI.R`
@@ -21,7 +23,7 @@ cd ./prism_data_processing
 Rscript src/setup.R
 ```
 
-For more information and FAQs see the [info](./info) folder.
+**For more information and FAQs see the [info](./info) folder.**
 
 ### `make_logMFI.R`
 Only necessary for processing raw files downloaded from [clue.io](https://clue.io/).
