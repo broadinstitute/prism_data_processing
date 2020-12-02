@@ -251,7 +251,7 @@ apply_combat <- function(Y) {
     dplyr::select(-cond, -V2)
 
   combat_corrected <- Y %>%
-    dplyr::left_join(combat) %>%
+    dplyr::left_join(combat, by = c("prism_replicate", "ccle_name", "pool_id", "culture", "pert_well")) %>%
     .$LFC.cb
 
   return(combat_corrected)
