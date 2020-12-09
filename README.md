@@ -29,13 +29,9 @@ Rscript src/setup.R
 Only necessary for re-processing raw files downloaded from [clue.io](https://clue.io/).
 
 Converts raw .gctx and .txt files downloaded from clue.io to readable logMFI.csv. This file contains raw log2 median fluorescence intensity (MFI) data for each cell line at each treatment. Requires:
-- `PR300_LMFI.gctx`: readout for PR300
-- `PR500_LMFI.gctx`: readout for PR500
-- `PR300_inst_info.txt`: treatment info for PR300
-- `PR300_cell_info.txt`: cell line info for PR300
-- `PR500_inst_info.txt`: treatment info for PR500
-- `PR500_cell_info.txt`: cell line info for PR500
-- `skipped_wells.csv`: file indicating which wells did not receive compound (optional)
+- `..._LEVEL2_MFI.gctx`: readout of MFI values
+- `...inst_info.txt`: treatment info
+- `..._cell_info.txt`: cell line info
 
 ### `data_processing.R`
 
