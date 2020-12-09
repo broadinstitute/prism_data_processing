@@ -13,8 +13,8 @@ For more general biomarker analysis see the `cdsr_biomarker` [package](https://g
 
 This repository contains 3 primary scripts:
 
-1. `make_logMFI.R`
-2. `MTS_Data_Processing.R`
+1. `pre_processing.R`
+2. `data_processing.R`
 3. `MTS_Analysis.R`
 
 **FIRST** run `setup.R` either in RStudio or terminal to install  packages required for analysis. For shell execute:
@@ -25,8 +25,8 @@ Rscript src/setup.R
 
 **For more information and FAQs see the [info](./info) folder.**
 
-### `make_logMFI.R`
-Only necessary for processing raw files downloaded from [clue.io](https://clue.io/).
+### `pre_processing.R`
+Only necessary for re-processing raw files downloaded from [clue.io](https://clue.io/).
 
 Converts raw .gctx and .txt files downloaded from clue.io to readable logMFI.csv. This file contains raw log2 median fluorescence intensity (MFI) data for each cell line at each treatment. Requires:
 - `PR300_LMFI.gctx`: readout for PR300
@@ -37,16 +37,16 @@ Converts raw .gctx and .txt files downloaded from clue.io to readable logMFI.csv
 - `PR500_cell_info.txt`: cell line info for PR500
 - `skipped_wells.csv`: file indicating which wells did not receive compound (optional)
 
-### `MTS_Data_Processing.R`
+### `data_processing.R`
 
-Does pre-processing based on raw median fluorescent intensity (MFI) values and generates tables with data on QC, viabilities, and dose-response parameters, as well as figures showing dose response curves.
+Calculates log-fold changes and dose response parameters based on normalized logMFI values.
 
 Steps of pre-processing outlined in [`MTS_pipeline.md`](info/MTS_pipeline.md).
 
 
 ### `MTS_Analysis.R`
 
-Generates biomarker analysis for the processed data, including, univariate and multivariate analyses. Requires a directory of expression data (RNA, mutations, etc.) and the results of `MTS_Data_Processing.R`. See below for more details on each analysis function. Relies on `analysis_functions.R`.
+Generates biomarker analysis for the processed data, including, univariate and multivariate analyses. Requires a directory of expression data (RNA, mutations, etc.) and the results of `data_processing.R`. See below for more details on each analysis function. Relies on the [cdsrmodels](https://github.com/broadinstitute/cdsr_models) R package.
 
 **NOTE:** in order to run biomarker analysis, files containing omics data for cell lines must be downloaded from [DepMap](https://depmap.org/portal/download/all/). In particular we recommend the latest versions of:
 - `Achilles_gene_effect.csv` (CRISPR dependencies)
@@ -62,11 +62,9 @@ Generates biomarker analysis for the processed data, including, univariate and m
 
 Once these files are downloaded, use [`biomarker_tables.R`](src/biomarker_tables.R) to convert tables to matrix form (this may require tweaking due to changes in file structures). This R script also generates two combined datasets: `x-ccle.csv` and `x-all.csv`. These are used for multivariate models and are based on CCLE data and all DepMap data respectively.
 
-### `MTS_functions.R` and `analysis_functions.R`
+### `MTS_functions.R`
 
-These files contain helper functions used in the scripts above and are sourced at the beginning of each (to install necessary packages and define functions). `analysis_functions.R` contains functions used in `MTS_Analysis.R` to generate biomarker analyses, while `MTS_functions.R` contains functions used in `MTS_Data_Processing.R`.
-
-In `analysis_functions.R`, each function takes a matrix of features (X) and a vector of responses (y) as input. `multivariate` fits both an elastic net and random forest to the data.
+This file contains helper functions used in the scripts above and is sourced at the beginning of each (to install necessary packages and define functions).
 
 ---
 _This repository is maintained by [Cancer Data Science](https://www.cancerdatascience.org/) at the Broad Institute of MIT and Harvard_
