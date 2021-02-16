@@ -45,12 +45,12 @@ In addition to Pearson correlations, we also report the posterior mean of the ef
 
 Our multivariate models use a combination of -omics datasets to generate predictions about compound sensitivity. In particular we use a cross-validated random forest model to predict sensitivity based on -omics features. We then compare the predictions of our model with actual results to determine model accuracy, reported as $R^2$ and Pearson Score:
 
-$$R^2 = 1- (\frac{(\hat{y} -  y)^2}{\textrm{var(y)}})$$
+$$R^2 = 1- \frac{\textrm{mean}(\hat{y} -  y)^2}{\textrm{var(y)}}$$
 $$PS  = \textrm{cor}(y, \hat{y})$$
 
 Where $y$ is the vector of observed sensitivities and $\hat{y}$ is the vector of predictions by the model.
 
-We can also extract the estimated importance of each feature of the model in generated the predictions in order to pick out potential biomarkers. We use "impurity" importances, which are a measure of the improvement of splitting criteria for each tree (Gini gain). Effectively, the feature importances tell us how much better the model performs with the inclusion of a give feature. Features that are important in well-performing models are said to be of interest.
+We can also extract the estimated importance of each feature of the model in generated the predictions in order to pick out potential biomarkers. We use "impurity" importances, which are a measure of the improvement of splitting criteria for each tree (Gini gain). Effectively, the feature importances tell us how much better the model performs with the inclusion of a given feature. Features that are important in well-performing models are said to be of interest.
 
 ![Random forest feature importances for AZ-628 and imatinib](./images/biomarkers.png)
 
