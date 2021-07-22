@@ -53,7 +53,7 @@ Generates biomarker analysis for the processed data, including, univariate and m
 - `primary-screen-replicate-collapsed-treatment-info.csv` (repurposing metadata)
 - `D2_Achilles_gene_dep_scores.csv` (shRNA)
 - `CCLE_metabolomics_20190502.csv` (metablomics)
-- `CCLE_RPPA_20181003.csv` (proteomics)
+- `protein_quant_current_normalized` (proteomics)
 - `CCLE_miRNA_20181103.gct` (miRNA)
 - `CCLE_gene_cn.csv` (copy number)
 - `CCLE_mutations.csv` (mutations)
