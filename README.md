@@ -50,6 +50,7 @@ Generates biomarker analysis for the processed data, including, univariate and m
 - `Achilles_gene_effect.csv` (CRISPR dependencies)
 - `CCLE_expression.csv` (gene expression)
 - `primary-screen-replicate-collapsed-logfold-change.csv` (repurposing)
+- `primary-screen-replicate-collapsed-treatment-info.csv` (repurposing metadata)
 - `D2_Achilles_gene_dep_scores.csv` (shRNA)
 - `CCLE_metabolomics_20190502.csv` (metablomics)
 - `CCLE_RPPA_20181003.csv` (proteomics)

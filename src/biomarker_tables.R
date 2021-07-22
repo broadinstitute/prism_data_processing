@@ -16,6 +16,7 @@ XPR <- data.table::fread(paste0(expression_dir, "/xpr.csv"))
 LIN <- data.table::fread(paste0(expression_dir, "/lin.csv"))
 shRNA <- data.table::fread(paste0(expression_dir, "/shrna.csv"))
 repurposing <- data.table::fread(paste0(expression_dir, "/rep.csv"))
+rep_info <- data.table::fread(paste0(expression_dir, "rep_info.csv"))
 
 
 # data table mapping depmap to ccle id
