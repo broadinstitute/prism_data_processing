@@ -3,6 +3,8 @@
   <img src="img/prism_logo_tagline_side.png" width="400" />
 </p>
 
+**This repository is deprecated please see the new [MTS pipeline](https://github.com/cmap/dockerized_mts)**
+
 # Prism Data Processing
 
 Public version of the data processing pipeline for [PRISM](https://www.theprismlab.org/) medium throughput screens (MTS). For use by collaborators to regenerate tables and plots correlating drug response to cell line features. Public cell line data for equivalent analysis is available on the [DepMap Portal](https://depmap.org/portal/).
